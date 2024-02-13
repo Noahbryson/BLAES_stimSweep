@@ -1,0 +1,2 @@
+CereStim:Waveform%20definition matrix StimulationConfigurations= { Cathode%20First Number%20of%20pulses Phase%201%20amp%20(uA) Phase%202%20amp%20(uA) Phase%201%20duration%20(us) Phase%202%20duration%20(us) Frequency%20(Hz) Interphase%20duration%20(us) Train%20Frequency%20(Hz) Train%20Duration%20(s) } { Configuration1 } 1 4 500 500 200 200 80 53 1 8 // Configurations for CereStim
+CereStim:Waveform%20definition matrix StimulationTriggers= { Expression Config%20ID Electrode(s) } { Trigger1 Trigger2 } StimulusCode==1 StimulusCode==2 1 1 2 1 // Triggers for CereStim
