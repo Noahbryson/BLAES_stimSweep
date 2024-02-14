@@ -43,16 +43,29 @@
 % Set the path of the BCI2000 main directory here
 loadBCI2kTools;
 BCI2KPath = 'C:\BCI2000\BCI2000';
-load('C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\stimConfigRowLabs.mat')
-videoPath = '';
+
+videoDir = 'C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\stimuli\*.mp4';
+saveDir  = 'C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\parms';
+
+videos = dir(videoDir);
+video_target = fullfile(videos(1).folder,videos(1).name);
+video_target = strcat(videos(1).folder,'\',videos(1).name);
+
+
 % enter stim channels, different at WU vs UU as WU plugs in hardware
 % manually due to number of recording channels.
-
-stimChannels = [1,3]; %stim channels passed to stimulator (cerestim?)
-stimAmps = [1,2]; %mA
+cathodeChannels = [1,3]; % cathode leading stim channels passed to stimulator 
+anodeChannels   = [2,4]; % anode leading stim channels passed to stimulator
+    % be sure cathode and anode channels are aligned with each other for
+    % bipolar pairs. 
+stimAmps = [1,2]; %mA, note 2 mA is not paired with 500 us pulse width.
 pulseWidth = [250, 500]; %us, single phase, double for entire biphasic stim
 frequencies = [28, 50, 80]; %Hz
 numTrials = 10;
+
+
+
+
 %% Generate Potential Conditions
 % note for evetual configurations, only half as many configs need to be
 % loaded since configs are repeated at two locations. triggers must be set
@@ -68,12 +81,12 @@ configID = 1;
 for i=1:length(pulseWidth)
     for j=1:length(stimAmps)
         for k=1:length(frequencies)
-            for q=1:length(stimChannels)
+            for q=1:length(cathodeChannels)
 
                 if pulseWidth(i) > 250 && stimAmps(j) > 1
-
+                    % do not pair 2 mA with 500 us PW
                 else
-                    temp = [1,4,pulseWidth(i),stimAmps(j),stimChannels(q),frequencies(k),stimCode,configID];
+                    temp = [1,4,pulseWidth(i),stimAmps(j),cathodeChannels(q),frequencies(k),stimCode,configID];
                     stimCode = stimCode+1;
                     stimMat_cathode = [stimMat_cathode; temp];
                     if q==2
@@ -87,12 +100,18 @@ end
 stimMat_anode = stimMat_cathode;
 stimMat_anode(:,1) = stimMat_anode(:,1) - 1; %switch to anodic leading
 stimMat_anode(:,end) = stimMat_anode(:,end) + configID-1; %adjust configIDs
-stimMat_anode(:,channelCol) = stimMat_anode(:,channelCol) + 1; % adjust channel to make bipolar pair
+
+
+% adjust channel to make bipolar pair
+for i=1:size(stimMat_anode,1)
+    idx = find(cathodeChannels == stimMat_anode(i,channelCol));
+    stimMat_anode(i,channelCol) = anodeChannels(idx);
+end
 numConfigs = size(stimMat_cathode,1);
 numParams = size(stimMat_cathode,2);
 seq = pseduoRandReplace(stimMat_cathode,0,0,0,ampCol,channelCol)';
-checkRepeats(seq,channelCol) % channel column
-checkRepeatVal(seq,ampCol,2) % amplitude column
+checkRepeats(seq,channelCol); % channel column, ensures no channels are repeated.
+checkRepeatVal(seq,ampCol,2); % amplitude column, ensures 2 mA is not repeated. 
 %% Generate Trial Sequence
 trial_seq = zeros(numConfigs*numTrials,numParams);
 for i=1:numTrials
@@ -110,10 +129,11 @@ for i=1:numTrials
 
     trial_seq(start:stop,:) = pseduoRandReplace(stimMat_cathode,multi,amp_init,chan_init,ampCol,channelCol);
 end
-checkRepeats(trial_seq,channelCol) % channel column
-checkRepeatVal(trial_seq,ampCol,2) % amplitude column
+checkRepeats(trial_seq,channelCol); % channel column
+checkRepeatVal(trial_seq,ampCol,2); % amplitude column
 
 %% Parm Generation
+
 % set up Stim Configs
 stim_configs = getUniqueConfigs(stimMat_cathode,stimMat_anode);
 param.StimulationConfigurations.Section = 'CereStim';
@@ -142,7 +162,7 @@ param.StimulationConfigurations.RowLabels = rowLabs;
 
 
 n_configs =size(stim_configs,1);
-% Set up Stimuli
+%% Set up Stimuli
 stimRowLabs = {'caption';'icon';'av';'EarlyOffsetExpression';'StimulusDuration'};
 param.Stimuli.Section      = 'Application';
 param.Stimuli.Type         = 'matrix';
@@ -150,18 +170,38 @@ param.Stimuli.DefaultValue = '';
 param.Stimuli.LowRange     = '';
 param.Stimuli.HighRange    = '';
 param.Stimuli.Comment      = 'captions and icons to be displayed, sounds to be played for different stimuli';
-param.Stimuli.Value        = cell(4,n_configs+2); % if isi built into stim blocks
+param.Stimuli.Value        = cell(5,n_configs+2); % if isi built into stim blocks
 % param.Stimuli.Value      = cell(4,2*n_configs+2); %if using empty blocks for isi
-param.Stimuli.Value(:,1)   = {'Press Space To Begin';'';'';'KeyDown==32';'40s'};
-param.Stimuli.Value(:,2)   = {'';'';videoPath;'';'5s'};
+
+param.Stimuli.Value{1,1}   = 'Press Space To Begin';
+param.Stimuli.Value{2,1}   = '';
+param.Stimuli.Value{3,1}   = '';
+param.Stimuli.Value{4,1}   = 'Keydown==32';
+param.Stimuli.Value{5,1}   = '40s';
+param.Stimuli.Value{1,2}   = '';
+param.Stimuli.Value{2,2}   = '';
+param.Stimuli.Value{3,2}   = video_target;
+param.Stimuli.Value{4,2}   = '';
+param.Stimuli.Value{5,2}   = '5s';
+
+param.Stimuli.ColumnLabels = cell(n_configs+3,1);
+param.Stimuli.ColumnLabels{1} = '1';
+param.Stimuli.ColumnLabels{2} = '2';
 for i=3:n_configs+2
-    param.Stimuli.Value(1,i)   = {''}; %caption
-    param.Stimuli.Value(2,i)   = {''}; %icon
-    param.Stimuli.Value(3,i)   = {''}; %av
-    param.Stimuli.Value(4,i)   = {''}; %interrupt
-    param.Stimuli.Value(5,i)   = {'1.5'}; %duration
+    param.Stimuli.Value{1,i}   = ''; %caption
+    param.Stimuli.Value{2,i}   = ''; %icon
+    param.Stimuli.Value{3,i}   = ''; %av
+    param.Stimuli.Value{4,i}   = ''; %interrupt
+    param.Stimuli.Value{5,i}   = '1.5'; %duration
+    param.Stimuli.ColumnLabels{i,1} = sprintf('%d',i+2);
 end
-param.Stimuli.Value(:,end+1)   = {'End of Run';'';'';'KeyDown==32';'40s'};
+
+param.Stimuli.Value{1,end+1}   = 'End of Run';
+param.Stimuli.Value{2,end}   = '';
+param.Stimuli.Value{3,end}   = '';
+param.Stimuli.Value{4,end}   = 'Keydown==32';
+param.Stimuli.Value{5,end}   = '40s';
+param.Stimuli.ColumnLabels{end,1} = sprintf('%d',i+3);
 % for i=n_configs+3:2*n_configs+2  %if using empty blocks for isi
 % param.Stimuli.Value(1,i)        = {''};
 % param.Stimuli.Value(2,i)        = {''};
@@ -170,9 +210,9 @@ param.Stimuli.Value(:,end+1)   = {'End of Run';'';'';'KeyDown==32';'40s'};
 % end
 
 param.Stimuli.RowLabels    = stimRowLabs;
-param.Stimuli.ColumnLabels    = cell(n_configs+2,1);
 
-% set up sequence;
+res = checkStructFields(param.Stimuli);
+%% set up sequence;
 param.Sequence.Section       = 'Application';
 param.Sequence.Type          = 'intlist';
 param.Sequence.DefaultValue  = '';
@@ -184,22 +224,21 @@ param.Sequence.Value{1,1} = '1'; % startup screen
 param.Sequence.Value{2,1} = '2'; % begin movie
 for i=1:size(trial_seq,1)
     param.Sequence.Value{i+2,1}  = sprintf('%d',trial_seq(i,7));
-    param.Sequence.NumericValue(i+2,1)  = trial_seq(i,7);
+    % param.Sequence.NumericValue(i+2,1)  = trial_seq(i,7);
 end
-param.Sequence.Value{end+1,1} = sprintf('%d',max(trial_seq(:,7))+3); % end
+param.Sequence.Value{end+1,1} = sprintf('%d',max(trial_seq(:,7))+1); % end
 
-% sequence type
+%% sequence type
 param.SequenceType.Section       = 'Application';
 param.SequenceType.Type          = 'int';
 param.SequenceType.DefaultValue  = '';
 param.SequenceType.LowRange      = '';
 param.SequenceType.HighRange     = '';
 param.SequenceType.Comment       = 'Sequence of stimuli is 0 deterministic, 1 random, 2 P3Speller compatible (enumeration)';
-param.SequenceType.Value         = '0';
-param.SequenceType.NumericValue  =  0;
+param.SequenceType.Value         = {'0'};
 
 
-% set up Stim Triggers
+%% set up Stim Triggers
 TriggerExp = 'StimulusCode';
 param.StimulationTriggers.Section = 'CereStim';
 param.StimulationTriggers.Type = 'matrix';
@@ -215,8 +254,8 @@ for i=1:numConfigs
     param.StimulationTriggers.Value{2,2*i}   = sprintf('%d',stimMat_anode(i,8));%Config
     param.StimulationTriggers.Value{3,2*i}   = sprintf('%d',stimMat_anode(i,5));%Electrode
 
-    param.StimulationTriggers.ColumnLabels{2*i-1} = sprintf('Trigger %d',2*i-1);
-    param.StimulationTriggers.ColumnLabels{2*i}   = sprintf('Trigger %d',2*i);
+    param.StimulationTriggers.ColumnLabels{2*i-1,1} = sprintf('Trigger %d',2*i-1);
+    param.StimulationTriggers.ColumnLabels{2*i,1}   = sprintf('Trigger %d',2*i);
 end
 param.StimulationTriggers.RowLabels = {'Expression';'Config ID'; 'Electrode(s)'};
 
@@ -229,22 +268,16 @@ param.StimulationTriggers.RowLabels = {'Expression';'Config ID'; 'Electrode(s)'}
 
 
 
-
-
-
 %% Write Parm
-% filename = "C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\parms\BLAES_stimsweep_run.prm";
-% parameter_lines = convert_bciprm( param );
-% fid = fopen(filename, 'w');
-%
-% for i=1:length(parameter_lines)
-%     fprintf( fid, '%s', parameter_lines{i} );
-%     fprintf( fid, '\r\n' );
-% end
-% fclose(fid);
+filename = "C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\parms\BLAES_stimsweep_run.prm";
+parameter_lines = convert_bciprm( param );
+fid = fopen(filename, 'w');
 
-
-
+for i=1:length(parameter_lines)
+    fprintf( fid, '%s', parameter_lines{i} );
+    fprintf( fid, '\r\n' );
+end
+fclose(fid);
 
 
 
@@ -339,3 +372,28 @@ for i=1:size(joint,1)
     end
 end
 end
+function isAllStringsOrCells = checkStructFields(structure)
+    % Initialize the flag as true
+    isAllStringsOrCells = true;
+    
+    % Get field names of the structure
+    fields = fieldnames(structure);
+    
+    % Iterate over each field
+    for i = 1:length(fields)
+        fieldValue = structure.(fields{i});
+        
+        % Check if the field is a structure itself and recurse
+        if isstruct(fieldValue)
+            isAllStringsOrCells = checkStructFields(fieldValue);
+            if ~isAllStringsOrCells
+                return; % Early return if any subfield is not a string or cell
+            end
+        % Check if the field is a string or cell
+        elseif ~(isstring(fieldValue) || iscell(fieldValue)|| ischar(fieldValue))
+            isAllStringsOrCells = false;
+            return; % Early return if the field is not a string or cell
+        end
+    end
+end
+
