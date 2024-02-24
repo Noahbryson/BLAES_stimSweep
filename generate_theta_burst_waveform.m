@@ -1,18 +1,13 @@
-% CCEP + DTI general projections from human connectome -> probabilistic
-% model of projection from basolateral complex to anterior/posterior
-% hippocampus. wont have this for all subjects but can probe this in some. 
-% 
-% why don't we have access to de-identified EHR/Neuropsych evaluations?
-% 
+function [time,y] =generate_theta_burst_waveform(frequency,amplitude)
 
-f2 = 80; %Hz
+f2 = frequency; %Hz
 f1 = 8;
 fs = 2000;
-t = linspace(0,1,fs);
-x = square(f1*2*pi*t);
+time = linspace(0,1,fs);
+x = square(f1*2*pi*time);
 x = (x+1) / 2;
-y = modulate_square(x,f1,f2,fs);
-
+y = amplitude*modulate_square(x,f1,f2,fs);
+y(1)=0;
 
 function x = modulate_square(waveform,base_f,mod_f,fs)
 locs = find(waveform==max(waveform));
@@ -37,8 +32,4 @@ for i=1:size(intervals,1)
     x(intervals(i,1):intervals(i,2)) = temp;
 end
 end
-
-
-
-
-
+end

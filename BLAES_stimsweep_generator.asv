@@ -40,18 +40,9 @@
 
 
 %% User Parameters
-% Set the path of the BCI2000 main directory here
-loadBCI2kTools;
-BCI2KPath = 'C:\BCI2000\BCI2000';
+BCI2KPath = 'C:\BCI2000\BCI2000'; % Set the path of the BCI2000 main directory here
+bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
 
-videoDir = 'C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\stimuli\*.mp4';
-saveDir  = 'C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\parms';
-
-videos = dir(videoDir);
-video_num = 2;
-parmName_dec = videos(video_num).name(1:20);
-video = fullfile(videos(video_num).folder,videos(video_num).name);
-video = strcat(videos(video_num).folder,'\',videos(video_num).name);
 
 
 % enter stim channels, different at WU vs UU as WU plugs in hardware
@@ -64,6 +55,28 @@ stimAmps = [1,2]; %mA, note 2 mA is not paired with 500 us pulse width.
 pulseWidth = [250, 500]; %us, single phase, double for entire biphasic stim
 frequencies = [33, 50, 80]; %Hz
 numTrials = 10;
+
+conditions2remove = [];% add the numeric value as they appear on the testing image
+
+%% Pathing
+disp('select stimuli main folder')
+% stimuliRoot = uigetdir();
+disp('select saving root folder (i.e. C:\Paradigms')
+% saveRoot = uigetdir();
+root = 'C:\Paradigms';
+stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli');
+checkDir(stimuliDir);
+parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep');
+checkDir(parmDir);
+
+
+videos = dir(strcat(stimuliDir,'\','*.mp4'));
+video_num = 3;
+parmName_dec = videos(video_num).name(1:20);
+video = fullfile(videos(video_num).folder,videos(video_num).name);
+
+
+
 
 %% Keyboard Map
 keyboard = struct;
@@ -81,6 +94,7 @@ keyMap = fullKeyMap(:,logicalIdx);
 % loaded since configs are repeated at two locations. triggers must be set
 % up to be unique, however
 stimMat_cathode = [];
+stimLabel = [];
 stimMat_cols = {'cathodeFirst' 'numPulses' 'pulseWidth' 'amp' 'channel' 'freq','stimCode','config_ID'};
 % Channel Condition
 channelCol = 5;
@@ -89,7 +103,7 @@ ampCol = 4;
 stimCode = 3; % stimCode 1 reserved for AV start sequence
 configID = 1;
 am_freq = 8;
-counter =1;
+counter =0;
 for i=1:length(pulseWidth)
     for j=1:length(stimAmps)
         for k=1:length(frequencies)
@@ -102,6 +116,7 @@ for i=1:length(pulseWidth)
                     counter = counter+1;
                     stimCode = stimCode+1;
                     stimMat_cathode = [stimMat_cathode; temp];
+                    stimLabel = [stimLabel; counter];
                     if q==2
                         configID = configID+ 1;
                     end
@@ -110,6 +125,8 @@ for i=1:length(pulseWidth)
         end
     end
 end
+stimMat_cathode = rm_combinations(stimMat_cathode,conditions2remove);
+stimLabel = rm_combinations(stimLabel,conditions2remove);
 stimMat_anode = stimMat_cathode;
 stimMat_anode(:,1) = stimMat_anode(:,1) - 1; %switch to anodic leading
 stimMat_anode(:,8) = stimMat_anode(:,8) + configID-1; %adjust configIDs
@@ -196,7 +213,7 @@ param.Stimuli.DefaultValue = '';
 param.Stimuli.LowRange     = '';
 param.Stimuli.HighRange    = '';
 param.Stimuli.Comment      = 'captions and icons to be displayed, sounds to be played for different stimuli';
-param.Stimuli.Value        = cell(5,n_configs+2); % if isi built into stim blocks
+param.Stimuli.Value        = cell(5,n_configs+4); % if isi built into stim blocks
 % param.Stimuli.Value      = cell(4,2*n_configs+2); %if using empty blocks for isi
 
 param.Stimuli.Value{1,1}   = 'Press Space To Begin';
@@ -210,7 +227,7 @@ param.Stimuli.Value{3,2}   = video;
 param.Stimuli.Value{4,2}   = '';
 param.Stimuli.Value{5,2}   = '5s';
 
-param.Stimuli.ColumnLabels = cell(n_configs+3,1);
+param.Stimuli.ColumnLabels = cell(n_configs+4,1);
 param.Stimuli.ColumnLabels{1} = '1';
 param.Stimuli.ColumnLabels{2} = '2';
 for i=3:n_configs+2
@@ -218,18 +235,18 @@ for i=3:n_configs+2
     param.Stimuli.Value{2,i}   = ''; %icon
     param.Stimuli.Value{3,i}   = ''; %av
     param.Stimuli.Value{4,i}   = ''; %interrupt
-    duration = 4 + (2*(rand)-1); % stimuli duration centered about 4s +/- 1s jitter. Note the first second is stimulation, and the rest is rest. 
-    param.Stimuli.Value{5,i}   = sprintf('%d',duration); %duration
+    duration = 4 + round((2*(rand)-1),2); % stimuli duration centered about 4s +/- 1s jitter. Note the first second is stimulation, and the rest is rest. 
+    param.Stimuli.Value{5,i}   = sprintf('%ds',duration); %duration
     param.Stimuli.ColumnLabels{i,1} = sprintf('%d',i);
 end
 
 % pause between blocks stimuli
-param.Stimuli.Value{1,end+1}   = 'Pause Between Blocks';
-param.Stimuli.Value{2,end}   = '';
-param.Stimuli.Value{3,end}   = '';
-param.Stimuli.Value{4,end}   = '';
-param.Stimuli.Value{5,end}   = '10s';
-param.Stimuli.ColumnLabels{end+1,1} = sprintf('%d',i+1);
+param.Stimuli.Value{1,end-1}   = 'Pause Between Blocks';
+param.Stimuli.Value{2,end-1}   = '';
+param.Stimuli.Value{3,end-1}   = '';
+param.Stimuli.Value{4,end-1}   = '';
+param.Stimuli.Value{5,end-1}   = '10s';
+param.Stimuli.ColumnLabels{end-1,1} = sprintf('%d',i+1);
 
 % end of run stimuli 
 param.Stimuli.Value{1,end}   = 'End of Run';
@@ -312,7 +329,7 @@ param.DynamicConfiguration.Value = {'1'};
 
 %% Write Trial Sweep Parm
 fname = sprintf('BLAES_stimsweep_run_%s.prm',parmName_dec);
-filename = fullfile("C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\parms",fname);
+filename = fullfile(parmDir,fname);
 parameter_lines = convert_bciprm( param );
 fid = fopen(filename, 'w');
 
@@ -353,6 +370,7 @@ testing_param.StimulationConfigurations.RowLabels = rowLabs;
 
 n_configs =size(stim_configs,1);
 %% Set up Stimuli
+cerestim_map_path = strcat(stimuliDir,'\cerestim_map.png');
 stimRowLabs = {'caption';'icon';'av';'EarlyOffsetExpression';'StimulusDuration'};
 testing_param.Stimuli.Section      = 'Application';
 testing_param.Stimuli.Type         = 'matrix';
@@ -361,8 +379,8 @@ testing_param.Stimuli.LowRange     = '';
 testing_param.Stimuli.HighRange    = '';
 testing_param.Stimuli.Comment      = 'captions and icons to be displayed, sounds to be played for different stimuli';
 
-testing_param.Stimuli.Value{1,1}   = 'Press Space To Begin';
-testing_param.Stimuli.Value{2,1}   = '';
+testing_param.Stimuli.Value{1,1}   = '';
+testing_param.Stimuli.Value{2,1}   = cerestim_map_path;
 testing_param.Stimuli.Value{3,1}   = '';
 testing_param.Stimuli.Value{4,1}   = 'Keydown==32';
 testing_param.Stimuli.Value{5,1}   = '600s';
@@ -415,11 +433,28 @@ stimDescription = num2cell(stimMat_cathode);
 stimDescription_labels = stimMat_cols;
 stimDescription_labels{end+1} = 'key';
 stimDescription_labels{end+1} = 'keypress_value';
-
+fig = figure(1);
+% set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
+set(gcf, 'Position', [1 1 1200 1080])
 for i=1:numConfigs
     testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
     testing_param.StimulationTriggers.Value{2,2*i-1} = sprintf('%d',stimMat_cathode(i,8));%Config
     testing_param.StimulationTriggers.Value{3,2*i-1} = sprintf('%d',stimMat_cathode(i,5));%Electrode
+    subplot(3,numConfigs/3,i)
+    f_g = stimMat_cathode(i,6);
+    cath_g = stimMat_cathode(i,5);
+    anode_g = stimMat_anode(i,5);
+    amp_g = stimMat_cathode(i,4);
+    pw_g = stimMat_cathode(i,3);
+    np_g = stimMat_cathode(i,2);
+    [t,y] = generate_theta_burst_waveform(f_g,amp_g);
+    plot(1000*t,y,'Linewidth',3)
+    xlim([0,200])
+    ylim([-0.5,2.5])
+    titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d',stimLabel(i),keyboardMap{2,i},cath_g,anode_g,amp_g,f_g,pw_g,np_g);
+    title(titleblock)
+    ylabel('amp (mA)')
+    xlabel('time (ms)')
     stimDescription{i,9} = keyboardMap{1,i};
     stimDescription{i,10} = keyboardMap{2,i};
     testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
@@ -431,8 +466,8 @@ for i=1:numConfigs
 end
 testing_param.StimulationTriggers.RowLabels = {'Expression';'Config ID'; 'Electrode(s)'};
 locDescriptions = cell2struct(stimDescription,stimDescription_labels,2);
-
-
+saveas(1,cerestim_map_path);
+exportgraphics(fig,cerestim_map_path,'Resolution',300);
 %% Setup Dynamic Mode
 testing_param.DynamicConfiguration.Section = 'CereStim';
 testing_param.DynamicConfiguration.Type = 'int';
@@ -453,7 +488,7 @@ testing_param.StartExpression.Value = {'Keydown==13'};
 
 %% Write Trial Test Parm
 fname = 'BLAES_stimsweep_test.prm';
-filename = fullfile("C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\parms",fname);
+filename = fullfile(parmDir,fname);
 parameter_lines = convert_bciprm( testing_param );
 fid = fopen(filename, 'w');
 
@@ -576,3 +611,21 @@ function isAllStringsOrCells = checkStructFields(structure)
     end
 end
 
+function bci2ktools(BCI2KPath)
+olddir = pwd;
+cd(BCI2KPath);
+cd tools, cd matlab;
+bci2000path -AddToMatlabPath tools/matlab;
+bci2000path -AddToMatlabPath tools/mex;
+bci2000path -AddToSystemPath tools/cmdline;   % required so that BCI2000CHAIN can call the command-line tools
+cd(olddir); % change directory back to where we were before
+clear olddir;
+end
+
+function x = rm_combinations(input, idx2remove)
+
+x = input;
+if numel(idx2remove) > 0
+x(idx2remove,:) = [];
+end
+end

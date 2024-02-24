@@ -16,9 +16,8 @@ checkDir(parmDir);
 
 
 videos = dir(strcat(stimuliDir,'\','*.mp4'));
-video_num = 4;
+video_num = 3;
 parmName_dec = videos(video_num).name(1:20);
 video = fullfile(videos(video_num).folder,videos(video_num).name);
 v=VideoReader(video);
-v1 = read(v,1000);
-imshow(v1)
+v.readFrame
