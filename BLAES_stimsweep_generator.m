@@ -444,9 +444,10 @@ for i=1:numConfigs
     amp_g = stimMat_cathode(i,4);
     pw_g = stimMat_cathode(i,3);
     np_g = stimMat_cathode(i,2);
-    [t,y] = generate_theta_burst_waveform(f_g,amp_g);
-    plot(1000*t,y,'Linewidth',2)
-    xlim([0,200])
+    % [t,y] = generate_theta_burst_waveform(f_g,amp_g);
+    [t,y,~,~] = modulateSquareWaves(1,f_g,8,2000,amp_g,0);
+    plot(1000*t,y,'Linewidth',2,'Color','r')
+    xlim([0,300])
     ylim([-0.5,2.5])
     titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d',stimLabel(i),keyboardMap{2,i},cath_g,anode_g,amp_g,f_g,pw_g,np_g);
     title(titleblock)
@@ -463,7 +464,7 @@ for i=1:numConfigs
 end
 testing_param.StimulationTriggers.RowLabels = {'Expression';'Config ID'; 'Electrode(s)'};
 locDescriptions = cell2struct(stimDescription,stimDescription_labels,2);
-saveas(1,cerestim_map_path);
+% saveas(1,cerestim_map_path);
 exportgraphics(fig,cerestim_map_path,'Resolution',300);
 %% Setup Dynamic Mode
 testing_param.DynamicConfiguration.Section = 'CereStim';
