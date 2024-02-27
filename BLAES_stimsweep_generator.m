@@ -41,10 +41,6 @@
 
 %% User Parameters
 BCI2KPath = 'C:\BCI2000\BCI2000'; % Set the path of the BCI2000 main directory here
-bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
-
-
-
 % enter stim channels, different at WU vs UU as WU plugs in hardware
 % manually due to number of recording channels.
 cathodeChannels = [1,3]; % cathode leading stim channels passed to stimulator 
@@ -59,6 +55,7 @@ numTrials = 10;
 conditions2remove = [];% add the numeric value as they appear on the testing image
 
 %% Pathing
+bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
 disp('select stimuli main folder')
 % stimuliRoot = uigetdir();
 disp('select saving root folder (i.e. C:\Paradigms')
@@ -68,8 +65,6 @@ stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli');
 checkDir(stimuliDir);
 parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep');
 checkDir(parmDir);
-
-
 videos = dir(strcat(stimuliDir,'\','*.mp4'));
 video_num = 3;
 parmName_dec = videos(video_num).name(1:20);
@@ -215,7 +210,8 @@ param.Stimuli.HighRange    = '';
 param.Stimuli.Comment      = 'captions and icons to be displayed, sounds to be played for different stimuli';
 param.Stimuli.Value        = cell(5,n_configs+4); % if isi built into stim blocks
 % param.Stimuli.Value      = cell(4,2*n_configs+2); %if using empty blocks for isi
-
+onset = 0;
+duration = 5;
 param.Stimuli.Value{1,1}   = 'Press Space To Begin';
 param.Stimuli.Value{2,1}   = '';
 param.Stimuli.Value{3,1}   = '';
@@ -225,7 +221,7 @@ param.Stimuli.Value{1,2}   = '';
 param.Stimuli.Value{2,2}   = '';
 param.Stimuli.Value{3,2}   = video;
 param.Stimuli.Value{4,2}   = '';
-param.Stimuli.Value{5,2}   = '5s';
+param.Stimuli.Value{5,2}   = sprintf('%ds',duration);
 
 param.Stimuli.ColumnLabels = cell(n_configs+4,1);
 param.Stimuli.ColumnLabels{1} = '1';
@@ -438,7 +434,7 @@ fig = figure(1);
 % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
 set(gcf, 'Position', [1 1 1980 1080])
 for i=1:numConfigs
-    testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
+    testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %d',TriggerExp,keyboardMap{2,i}); %Expression
     testing_param.StimulationTriggers.Value{2,2*i-1} = sprintf('%d',stimMat_cathode(i,8));%Config
     testing_param.StimulationTriggers.Value{3,2*i-1} = sprintf('%d',stimMat_cathode(i,5));%Electrode
     subplot(3,numConfigs/3,i)
@@ -458,7 +454,7 @@ for i=1:numConfigs
     xlabel('time (ms)')
     stimDescription{i,9} = keyboardMap{1,i};
     stimDescription{i,10} = keyboardMap{2,i};
-    testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
+    testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %d',TriggerExp,keyboardMap{2,i}); %Expression
     testing_param.StimulationTriggers.Value{2,2*i}   = sprintf('%d',stimMat_anode(i,8));%Config
     testing_param.StimulationTriggers.Value{3,2*i}   = sprintf('%d',stimMat_anode(i,5));%Electrode
 
