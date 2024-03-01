@@ -1,17 +1,17 @@
 %% BCI2000 BLAES Stim Parameter Sweep .prm Generator
 %
-% Change the n_rows and n_stimuli variables to store more information with
-% the stimuli or add additional stimuli. Best practice is to separate
-% stimuli into banks (e.g. 1-25, 101-125, etc) for easy evaluation later.
-%
-% Note that every stimulus needs to have an index for every row desired,
-% even if that row label is not meaningful for the stimulus.
-%
 % A sequence is created to alternate the fixation cross stimuli with the
 % image stimuli.
 %
 % The stimuli and meaningful parameters are written into a param
 % variable and stored as a *.prm file using the convert_bciprm function.
+% 
+% The User Parameters Section is the only thing that should be edited in this
+% script
+% The current version requires two channels to be used as input, future
+% versions will allow for 1-48 channels to be selected (although 48
+% channels would be a bit excessive, and is the max supported by the cerestim)
+%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Author: Noah Bryson <noahbryson@neurotechcenter.org>
@@ -39,6 +39,23 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
+%% TODO
+% test parameter files with cerestim to ensure stimulation is happening
+%   when and how I predict it will. 
+%   - it may be useful to do a recording on the gUSB amp to measure this lol.
+%
+% make CCEP configurations dynamic based on the number of channels.
+%   Currently CCEPs are statically set for two channels, this should not be
+%   hard to implement I am just tired of working on this.
+%
+% make an option to include user feedback so I can use the same script to
+%   generate Tao's stimulation titration experiment
+%
+% make train frequency and duration configurable
+%
+% make number of pulses able to be a user entry component, dynamically
+%   assign if not
+
 %% User Parameters
 BCI2KPath = 'C:\BCI2000\BCI2000'; % Set the path of the BCI2000 main directory here
 % enter stim channels, different at WU vs UU as WU plugs in hardware
@@ -50,23 +67,27 @@ anodeChannels   = [2,4]; % anode leading stim channels passed to stimulator
 stimAmps = [1,2]; %mA, note 2 mA is not paired with 500 us pulse width.
 pulseWidth = [250, 500]; %us, single phase, double for entire biphasic stim
 frequencies = [33, 50, 80]; %Hz
-numTrials = 25;
+num_pulses = []; % optional parameter, fill in for number of pulses associated with each primary frequency. 
+%                  If the numel between the two is not equal, num_pulses will be dynamically assigned
+carrier_freq = 8; 
+numTrials = 25; % number of trials for each condition, each block contains one trial of each condition. 1 Block takes (6s x number of configurations), note follow up blocks will have a 10s delay.
+video_num = 5; % video index 
+conditions2remove = [];% add the numeric value as they appear on the testing image
+generateTest = 0; % set to 1 to regenerate testing sequence and image
+rmHighestChargeCondition = 0; %set to 1 if removing highest amplitude-pulsewidth pair
 
-conditions2remove = [7,8];% add the numeric value as they appear on the testing image
-
-%% Pathing
 bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
-disp('select stimuli main folder')
-% stimuliRoot = uigetdir();
-disp('select saving root folder (i.e. C:\Paradigms')
-% saveRoot = uigetdir();
+% disp('select stimuli main folder')
+% % stimuliRoot = uigetdir();
+% disp('select saving root folder (i.e. C:\Paradigms')
+% % saveRoot = uigetdir();
 root = 'C:\Paradigms';
-stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli');
+stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli'); % path to folder containing stimuli
 checkDir(stimuliDir);
-parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep');
+parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep'); % path to write parameter file to
 checkDir(parmDir);
 videos = dir(strcat(stimuliDir,'\','*.mp4'));
-video_num = 3;
+
 parmName_dec = videos(video_num).name(1:20);
 video = fullfile(videos(video_num).folder,videos(video_num).name);
 
@@ -79,15 +100,21 @@ temp = cellfun(@upper,{'q' 'w' 'e' 'r' 't' 'y' 'u' 'i' 'o' 'p' 'a' 's' 'd' 'f' '
 keyboard.keys= temp;
 keyboard.X = [0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 1 2 3 4 5 6 7]*10;
 keyboard.Y = [2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0]*20;
-load("C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\keys2numbers.mat")
+load("keys2numbers.mat") % load a keyboard mapping file which is apart of this repository. 
 test = cellfun(@num2str, keyboard.keys, 'UniformOutput', false);
 test2 = cellfun(@num2str, fullKeyMap(1,:), 'UniformOutput', false);
 logicalIdx = ismember(test2,test);
 keyMap = fullKeyMap(:,logicalIdx);
 %% Generate Potential Conditions
-% note for evetual configurations, only half as many configs need to be
-% loaded since configs are repeated at two locations. triggers must be set
-% up to be unique, however
+% 
+% 
+% 
+if numel(frequencies) ~= numel(num_pulses)
+    num_pulses = zeros(size(frequencies));
+    for k=1:length(frequencies)
+        num_pulses(k) = floor(frequencies(k)/(2*carrier_freq))+1;
+    end
+end
 stimMat_cathode = [];
 stimLabel = [];
 stimMat_cols = {'cathodeFirst' 'numPulses' 'pulseWidth' 'amp' 'channel' 'freq','stimCode','config_ID'};
@@ -97,17 +124,17 @@ channelCol = 5;
 ampCol = 4;
 stimCode = 3; % stimCode 1&2 reserved for AV start sequence
 configID = 1;
-am_freq = 8;
+
 counter =0;
 for i=1:length(pulseWidth)
     for j=1:length(stimAmps)
         for k=1:length(frequencies)
             for q=1:length(cathodeChannels)
 
-                if pulseWidth(i) > 250 && stimAmps(j) >= max(stimAmps)+1
+                if pulseWidth(i) > 250 && stimAmps(j) >= max(stimAmps) && rmHighestChargeCondition
                     % do not pair 2 mA with 500 us PW
                 else
-                    temp = [1,floor(frequencies(k)/(2*am_freq))+1,pulseWidth(i),stimAmps(j),cathodeChannels(q),frequencies(k),stimCode,configID];
+                    temp = [1,num_pulses(k),pulseWidth(i),stimAmps(j),cathodeChannels(q),frequencies(k),stimCode,configID];
                     counter = counter+1;
                     stimCode = stimCode+1;
                     stimMat_cathode = [stimMat_cathode; temp];
@@ -189,7 +216,7 @@ for i=1:size(stim_configs,1)
     param.StimulationConfigurations.Value{7, i}  = sprintf('%d',stim_configs(i,6));%stim freq 
     param.StimulationConfigurations.Value{8, i}  = sprintf('%d',53);%inter pulse duration (53 us min)
     param.StimulationConfigurations.Value{9, i}  = sprintf('%d',1);% train duration 
-    param.StimulationConfigurations.Value{10,i}  = sprintf('%d',8);% train freq 
+    param.StimulationConfigurations.Value{10,i}  = sprintf('%d',carrier_freq);% train freq 
     param.StimulationConfigurations.ColumnLabels{i,1} = sprintf('Configuration %d',i);
 end
 CCEP_amplitude = 2000; % uA
@@ -454,7 +481,7 @@ end
 fclose(fid);
 
 %% Stimulation Testing Parm Generation
-if numel(conditions2remove) == 0
+if numel(conditions2remove) == 0 && generateTest 
     % set up Stim Configs
     stim_configs = getUniqueConfigs(stimMat_cathode,stimMat_anode);
     testing_param.StimulationConfigurations.Section = 'CereStim';
@@ -527,8 +554,7 @@ if numel(conditions2remove) == 0
     
     %% set up Stim Triggers
     TriggerExp = 'Keydown';
-    load("C:\Users\nbrys\Documents\Brunner\code\BLAES_stimSweep\keymapping.mat") % this loads the keymapping matfile
-    keyboardMap = keyMap;
+    
     % new_map = cell(2,numConfigs);
     % for i=1:(size(new_map,2)/2)
     % new_map{1,2*i-1} = keyboardMap{1,i};
@@ -551,7 +577,7 @@ if numel(conditions2remove) == 0
     % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
     set(gcf, 'Position', [1 1 1980 1080])
     for i=1:numConfigs
-        testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
+        testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %d',TriggerExp,keyMap{2,i}); %Expression
         testing_param.StimulationTriggers.Value{2,2*i-1} = sprintf('%d',stimMat_cathode(i,8));%Config
         testing_param.StimulationTriggers.Value{3,2*i-1} = sprintf('%d',stimMat_cathode(i,5));%Electrode
         subplot(3,numConfigs/3,i)
@@ -562,16 +588,16 @@ if numel(conditions2remove) == 0
         pw_g = stimMat_cathode(i,3);
         np_g = stimMat_cathode(i,2);
         [t,y] = generate_theta_burst_waveform(f_g,amp_g);
-        plot(1000*t,y,'Linewidth',2)
+        plot(1000*t,y,'Linewidth',2,'Color','r')
         xlim([0,200])
         ylim([-0.5,2.5])
-        titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d',stimLabel(i),keyboardMap{2,i},cath_g,anode_g,amp_g,f_g,pw_g,np_g);
+        titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d',stimLabel(i),keyMap{2,i},cath_g,anode_g,amp_g,f_g,pw_g,np_g);
         title(titleblock)
         ylabel('amp (mA)')
         xlabel('time (ms)')
-        stimDescription{i,9} = keyboardMap{1,i};
-        stimDescription{i,10} = keyboardMap{2,i};
-        testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
+        stimDescription{i,9} = keyMap{1,i};
+        stimDescription{i,10} = keyMap{2,i};
+        testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %d',TriggerExp,keyMap{2,i}); %Expression
         testing_param.StimulationTriggers.Value{2,2*i}   = sprintf('%d',stimMat_anode(i,8));%Config
         testing_param.StimulationTriggers.Value{3,2*i}   = sprintf('%d',stimMat_anode(i,5));%Electrode
     
@@ -612,7 +638,7 @@ if numel(conditions2remove) == 0
     end
     fclose(fid);
 else
-    disp('Conditions Excluded, testing sweep not generated')
+    fprintf('Testing param not generated\nGenerate Test: %d\nNum Excluded Conditions: %d',generateTest,numel(conditions2remove))
 end
 
 %% Functions
@@ -642,9 +668,10 @@ for j=2:length(rows)
     end
     % Channel Condition
     cond2 = [];
+    singualrityFlag = numel(unique(X(:,channelCol)));
     checkVal = X(end,channelCol);
     for i=1:length(unused)
-        if temp(i,channelCol) ~= checkVal
+        if temp(i,channelCol) ~= checkVal || singualrityFlag ==1 
             cond2 = [cond2 unused(i)];
         end
     end
@@ -695,9 +722,9 @@ joint = [cathode; anode];
 configs = [];
 ID = 0;
 for i=1:size(joint,1)
-    val = joint(i,end);
+    val = joint(i,8);
     if val ~= ID
-        configs = [configs; [joint(i,1:end-2),val]];
+        configs = [configs; [joint(i,1:6),val]];
         ID = val;
     end
 end

@@ -39,8 +39,26 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
+%% TODO
+% test parameter files with cerestim to ensure stimulation is happening
+%   when and how I predict it will. 
+%   - it may be useful to do a recording on the gUSB amp to measure this lol.
+%
+% make CCEP configurations dynamic based on the number of channels.
+%   Currently CCEPs are statically set for two channels, this should not be
+%   hard to implement I am just tired of working on this.
+%
+% make an option to include user feedback so I can use the same script to
+%   generate Tao's stimulation titration experiment
+%
+% make train frequency and duration configurable
+%
+% make number of pulses able to be a user entry component, dynamically
+%   assign if not
+
 %% User Parameters
 BCI2KPath = 'C:\BCI2000\BCI2000'; % Set the path of the BCI2000 main directory here
+
 % enter stim channels, different at WU vs UU as WU plugs in hardware
 % manually due to number of recording channels.
 cathodeChannels = [1,3]; % cathode leading stim channels passed to stimulator 
@@ -50,10 +68,15 @@ anodeChannels   = [2,4]; % anode leading stim channels passed to stimulator
 stimAmps = [1,2]; %mA, note 2 mA is not paired with 500 us pulse width.
 pulseWidth = [250, 500]; %us, single phase, double for entire biphasic stim
 frequencies = [33, 50, 80]; %Hz
-numTrials = 25;
-
+num_pulses = []; % optional parameter, fill in for number of pulses associated with each primary frequency. 
+%                  If the numel between the two is not equal, num_pulses will be dynamically assigned
+%                  NOTE: if multiple carrier frequencies, this variable
+%                  must be filled in. 
+numTrials = 25; % number of trials for each condition, each block contains one trial of each condition. 1 Block takes 2 min 24 seconds, note follow up blocks will have a 10s delay.
+video_num = 5; % video index 
 conditions2remove = [];% add the numeric value as they appear on the testing image
-
+generateTest = 0; % set to 1 to regenerate testing sequence and image
+rmHighestChargeCondition = 0; %set to 1 if removing highest amplitude-pulsewidth pair
 %% Pathing
 bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
 disp('select stimuli main folder')
@@ -66,7 +89,7 @@ checkDir(stimuliDir);
 parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep');
 checkDir(parmDir);
 videos = dir(strcat(stimuliDir,'\','*.mp4'));
-video_num = 3;
+
 parmName_dec = videos(video_num).name(1:20);
 video = fullfile(videos(video_num).folder,videos(video_num).name);
 
@@ -85,12 +108,14 @@ test2 = cellfun(@num2str, fullKeyMap(1,:), 'UniformOutput', false);
 logicalIdx = ismember(test2,test);
 keyMap = fullKeyMap(:,logicalIdx);
 %% Generate Potential Conditions
-% note for evetual configurations, only half as many configs need to be
-% loaded since configs are repeated at two locations. triggers must be set
-% up to be unique, however
+% 
+% 
+% 
+if numel(frequencies) ~= numel(num_pulses)
+end
 stimMat_cathode = [];
 stimLabel = [];
-stimMat_cols = {'cathodeFirst' 'numPulses' 'pulseWidth' 'amp' 'channel' 'freq','stimCode','config_ID'};
+stimMat_cols = {'cathodeFirst' 'numPulses' 'pulseWidth' 'amp' 'channel' 'freq','stimCode','config_ID','train_f','duration'};
 % Channel Condition
 channelCol = 5;
 % stim Amp Condition
@@ -104,10 +129,10 @@ for i=1:length(pulseWidth)
         for k=1:length(frequencies)
             for q=1:length(cathodeChannels)
 
-                if pulseWidth(i) > 250 && stimAmps(j) >= max(stimAmps)+1
+                if pulseWidth(i) > 250 && stimAmps(j) >= max(stimAmps) && rmHighestChargeCondition
                     % do not pair 2 mA with 500 us PW
                 else
-                    temp = [1,floor(frequencies(k)/(2*am_freq))+1,pulseWidth(i),stimAmps(j),cathodeChannels(q),frequencies(k),stimCode,configID];
+                    temp = [1,floor(frequencies(k)/(2*am_freq))+1,pulseWidth(i),stimAmps(j),cathodeChannels(q),frequencies(k),stimCode,configID,8,1];
                     counter = counter+1;
                     stimCode = stimCode+1;
                     stimMat_cathode = [stimMat_cathode; temp];
@@ -454,7 +479,7 @@ end
 fclose(fid);
 
 %% Stimulation Testing Parm Generation
-if numel(conditions2remove) == 0
+if numel(conditions2remove) == 0 && generateTest 
     % set up Stim Configs
     stim_configs = getUniqueConfigs(stimMat_cathode,stimMat_anode);
     testing_param.StimulationConfigurations.Section = 'CereStim';
@@ -551,7 +576,7 @@ if numel(conditions2remove) == 0
     % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
     set(gcf, 'Position', [1 1 1980 1080])
     for i=1:numConfigs
-        testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
+        testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %d',TriggerExp,keyboardMap{2,i}); %Expression
         testing_param.StimulationTriggers.Value{2,2*i-1} = sprintf('%d',stimMat_cathode(i,8));%Config
         testing_param.StimulationTriggers.Value{3,2*i-1} = sprintf('%d',stimMat_cathode(i,5));%Electrode
         subplot(3,numConfigs/3,i)
@@ -562,7 +587,7 @@ if numel(conditions2remove) == 0
         pw_g = stimMat_cathode(i,3);
         np_g = stimMat_cathode(i,2);
         [t,y] = generate_theta_burst_waveform(f_g,amp_g);
-        plot(1000*t,y,'Linewidth',2)
+        plot(1000*t,y,'Linewidth',2,'Color','r')
         xlim([0,200])
         ylim([-0.5,2.5])
         titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d',stimLabel(i),keyboardMap{2,i},cath_g,anode_g,amp_g,f_g,pw_g,np_g);
@@ -571,7 +596,7 @@ if numel(conditions2remove) == 0
         xlabel('time (ms)')
         stimDescription{i,9} = keyboardMap{1,i};
         stimDescription{i,10} = keyboardMap{2,i};
-        testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %s',TriggerExp,keyboardMap{2,i}); %Expression
+        testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %d',TriggerExp,keyboardMap{2,i}); %Expression
         testing_param.StimulationTriggers.Value{2,2*i}   = sprintf('%d',stimMat_anode(i,8));%Config
         testing_param.StimulationTriggers.Value{3,2*i}   = sprintf('%d',stimMat_anode(i,5));%Electrode
     
@@ -612,7 +637,7 @@ if numel(conditions2remove) == 0
     end
     fclose(fid);
 else
-    dis
+    fprintf('Testing param not generated\nGenerate Test: %d\nNum Excluded Conditions: %d',generateTest,numel(conditions2remove))
 end
 
 %% Functions
@@ -695,9 +720,9 @@ joint = [cathode; anode];
 configs = [];
 ID = 0;
 for i=1:size(joint,1)
-    val = joint(i,end);
+    val = joint(i,8);
     if val ~= ID
-        configs = [configs; [joint(i,1:end-2),val]];
+        configs = [configs; [joint(i,1:6),joint(i,9:10),val]];
         ID = val;
     end
 end
