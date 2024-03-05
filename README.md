@@ -73,11 +73,11 @@ Version 1.0
   -  generate_theta_burst_waveform.m
     - function to generate modulated waveforms for testing image
  
-- frequency_feasibility.m (Deprecated)
-  - just my scratch script
+  - frequency_feasibility.m (Deprecated)
+    - just my scratch script
  
-- checkDir.m
-  - verifies if a string is a directory.
+  - checkDir.m
+    - verifies if a string is a directory.
  
 # TODO
 1. make CCEP configurations dynamic based on the number of channels.
