@@ -1,7 +1,19 @@
 # Repository for Parameter Generator and Parm Fragments for the BLAES stimSweep Task.
+Version 1.0
 ------------
 # BLAES_stimsweep_generator_CCEP.m
-all stimulation currently occurs in one-second bursts, modulated by the carrier frequency. 
+## Notes
+### waveforms
+  all stimulation currently occurs in one-second bursts, modulated by the carrier frequency. This will be updated in a later version
+### timing
+  1 Block takes (6s x number of configurations) when CCEPs are included
+  1 Block takes (5s x number of configurations) when CCEPs are excluded
+  NOTE: The start of a new BLOCK will have a 10s delay.
+
+### exclusions
+  excluding a 1 mA condition will cause this to break unfortunately,
+  since the pseduorandomization uses recursive methods to ensure rules
+  about amplitude and channels are not violated. 
 ## Parameters
 - BCI2kPath: String
   - Path on your machine to the BCI2000 distribution. Required for .mex files needed to write parameter files
@@ -65,4 +77,17 @@ all stimulation currently occurs in one-second bursts, modulated by the carrier 
   - just my scratch script
  
 - checkDir.m
-  - verifies if a string is a directory.  
+  - verifies if a string is a directory.
+ 
+# TODO
+1. make CCEP configurations dynamic based on the number of channels.
+  Currently CCEPs are statically set for two channels, this should not be
+  hard to implement I am just tired of working on this.
+
+2. add an option for only including CCEPs
+on every other block. 
+
+3. make an option to include user feedback so I can use the same script to
+  generate Tao's stimulation titration experiment
+
+4. make train frequency and duration configurable
