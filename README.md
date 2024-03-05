@@ -71,7 +71,7 @@ Version 1.0
     - function to generate modulated waveforms for testing image
    
   -  generate_theta_burst_waveform.m
-    - function to generate modulated waveforms for testing image
+    -  function to generate modulated waveforms for testing image
  
   - frequency_feasibility.m (Deprecated)
     - just my scratch script
