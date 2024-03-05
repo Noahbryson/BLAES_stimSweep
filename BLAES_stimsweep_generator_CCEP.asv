@@ -69,7 +69,7 @@
 % exclusions
 %   excluding a 1 mA condition will cause this to break unfortunately,
 %   since the pseduorandomization uses recursive methods to ensure rules
-%   about amplitude and channels are not violated. 
+%   about amplitude and channels 
 
 BCI2KPath = 'C:\BCI2000\BCI2000'; % Set the path of the BCI2000 main directory here
 % enter stim channels, different at WU vs UU as WU plugs in hardware
@@ -78,13 +78,13 @@ cathodeChannels = [1,3]; % cathode leading stim channels passed to stimulator
 anodeChannels   = [2,4]; % anode leading stim channels passed to stimulator
 %       be sure cathode and anode channels are aligned with each other for
 %       bipolar pairs. 
-stimAmps = [1,2]; %mA
+stimAmps = [1,2]; %mA, note 2 mA is not paired with 500 us pulse width.
 pulseWidth = [250, 500]; %us, single phase, double for entire biphasic stim
 frequencies = [33, 50, 80]; %Hz
 num_pulses = [3 4 6]; % optional parameter, fill in for number of pulses associated with each primary frequency. 
 %       If the numel between the two is not equal, num_pulses will be dynamically assigned
 carrier_freq = 8; 
-num_blocks = 25; % number of trials for each condition, each block contains one trial of each condition. 
+numTrials = 25; % number of trials for each condition, each block contains one trial of each condition. 
 video_num = 1; % video index, name and number below
 %  1:   1 Year of Growing Food - A whole season of vegetable gardening.mp4'
 %  2:   2 Hours of Digital Art.mp4'
@@ -186,8 +186,8 @@ checkRepeatVal(seq,ampCol,max(stimAmps)); % amplitude column, ensures 2 mA is no
 %% Generate Trial Sequence
 start = 1;
 stop = numConfigs;
-trial_seq = zeros(numConfigs*num_blocks,numParams);
-for i=1:num_blocks
+trial_seq = zeros(numConfigs*numTrials,numParams);
+for i=1:numTrials
     
     if i == 1
         multi = 0;
@@ -267,7 +267,7 @@ n_configs =size(stim_configs,1);
 
 
 %% Set up Stimuli
-n_jitters = n_configs * num_blocks;
+n_jitters = n_configs * numTrials;
 stimRowLabs = {'caption';'icon';'av';'EarlyOffsetExpression';'StimulusDuration'};
 param.Stimuli.Section      = 'Application';
 param.Stimuli.Type         = 'matrix';
