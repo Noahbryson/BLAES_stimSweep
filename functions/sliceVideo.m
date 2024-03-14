@@ -1,9 +1,4 @@
-
-
-
-
 function [path,idx,onset] = sliceVideo(videoDir,v,onset,duration,idx)
-
 
 startFrame = onset * v.FrameRate;
 endFrame = (onset+duration)*v.FrameRate;

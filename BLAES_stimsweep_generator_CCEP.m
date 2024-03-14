@@ -62,8 +62,9 @@
 %% User Parameters
 
 % timing
-%   1 Block takes (6s x number of configurations) when CCEPs are included
-%   1 Block takes (5s x number of configurations) when CCEPs are excluded
+%   1 Block takes (6s x number of configurations)
+%   This is preserved with and without CCEPs. CCEPs add an additional 2
+%   seconds, so the baseline period between 
 %   NOTE: The start of a new BLOCK will have a 10s delay.
 
 % exclusions
@@ -74,18 +75,18 @@
 BCI2KPath = 'C:\BCI2000\BCI2000'; % Set the path of the BCI2000 main directory here
 % enter stim channels, different at WU vs UU as WU plugs in hardware
 % manually due to number of recording channels.
-cathodeChannels = [1,3]; % cathode leading stim channels passed to stimulator 
-anodeChannels   = [2,4]; % anode leading stim channels passed to stimulator
+cathodeChannels = [1, 3]; % cathode leading stim channels passed to stimulator 
+anodeChannels   = [2, 4]; % anode leading stim channels passed to stimulator
 %       be sure cathode and anode channels are aligned with each other for
 %       bipolar pairs. 
 stimAmps = [1,2]; %mA
 pulseWidth = [250, 500]; %us, single phase, double for entire biphasic stim
 frequencies = [33, 50, 80]; %Hz
-num_pulses = [3 4 6]; % optional parameter, fill in for number of pulses associated with each primary frequency. 
+num_pulses =  [3,  4,  6]; % optional parameter, fill in for number of pulses associated with each primary frequency. 
 %       If the numel between the two is not equal, num_pulses will be dynamically assigned
 carrier_freq = 8; 
 num_blocks = 25; % number of trials for each condition, each block contains one trial of each condition. 
-video_num = 1; % video index, name and number below
+video_num = 2; % video index, name and number below
 %  1:   1 Year of Growing Food - A whole season of vegetable gardening.mp4'
 %  2:   2 Hours of Digital Art.mp4'
 %  3:   500 Days Survival And Build In A Rain Forest - NO FOOD, NO WATER, NO SHELTER.mp4'
@@ -93,10 +94,11 @@ video_num = 1; % video index, name and number below
 %  5:   y2mate.com - Great Inventions  60 Minutes Full Episodes_720p.mp4'                }
 
 conditions2remove = [];% add the numeric value as they appear on the testing image
-generateTest = 0; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
+generateTest = 1; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
 rmHighestChargeCondition = 0; % set to 1 if removing highest amplitude-pulsewidth pair
 allowCCEPs = 1; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
-
+CCEP_amplitude = 2000; % uA
+CCEP_ISI = 1; % sec, duration following a CCEP 
 % Pathing
 root = 'C:\Paradigms';
 stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli'); % path to folder containing stimuli
@@ -106,7 +108,7 @@ checkDir(parmDir);
 videos = dir(strcat(stimuliDir,'\','*.mp4'));
 
 parmName_dec = videos(video_num).name(1:20);
-video = fullfile(videos(video_num).folder,videos(video_num).name);
+videoPath = fullfile(videos(video_num).folder,videos(video_num).name);
 
 bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
 
@@ -124,6 +126,10 @@ test = cellfun(@num2str, keyboard.keys, 'UniformOutput', false);
 test2 = cellfun(@num2str, fullKeyMap(1,:), 'UniformOutput', false);
 logicalIdx = ismember(test2,test);
 keyMap = fullKeyMap(:,logicalIdx);
+%% Video Information
+video = VideoReader(videoPath);
+vid_duration = video.Duration; % duration of the video in seconds
+clear video
 %% Generate Potential Conditions
 % 
 % 
@@ -238,7 +244,6 @@ for i=1:size(stim_configs,1)
     param.StimulationConfigurations.Value{10,i}  = sprintf('%d',carrier_freq);% train freq 
     param.StimulationConfigurations.ColumnLabels{i,1} = sprintf('Configuration %d',i);
 end
-CCEP_amplitude = 2000; % uA
 param.StimulationConfigurations.Value{1, end-1}  = sprintf('%d', 1);                %cathode bool
 param.StimulationConfigurations.Value{2, end-1}  = sprintf('%d', 1);                % n pulses
 param.StimulationConfigurations.Value{3, end-1}  = sprintf('%d', CCEP_amplitude/2); % amp 1
@@ -275,10 +280,9 @@ param.Stimuli.DefaultValue = '';
 param.Stimuli.LowRange     = '';
 param.Stimuli.HighRange    = '';
 param.Stimuli.Comment      = 'captions and icons to be displayed, sounds to be played for different stimuli';
-param.Stimuli.Value        = cell(5,n_configs+n_jitters+7); % 
+param.Stimuli.Value        = cell(5,n_configs+n_jitters+8); % 
 % param.Stimuli.Value      = cell(4,2*n_configs+2); %if using empty blocks for isi
 onset = 0;
-duration = 5;
 % vidIDX = 1;
 % v=VideoReader(video);
 % [vidSlice,vidIDX,onset]=sliceVideo(stimuliDir,v,onset,duration,vidIDX);
@@ -287,29 +291,30 @@ param.Stimuli.Value{2,1}   = '';
 param.Stimuli.Value{3,1}   = '';
 param.Stimuli.Value{4,1}   = 'Keydown==32';
 param.Stimuli.Value{5,1}   = '40s';
+videoStart_duration = 1; % seconds
 param.Stimuli.Value{1,2}   = ''; % stim code 2 = begin video
 param.Stimuli.Value{2,2}   = '';
-param.Stimuli.Value{3,2}   = video;
+param.Stimuli.Value{3,2}   = videoPath;
 param.Stimuli.Value{4,2}   = '';
-param.Stimuli.Value{5,2}   = '1s';
+param.Stimuli.Value{5,2}   = sprintf('%ds',videoStart_duration);
 
 param.Stimuli.ColumnLabels = cell(n_configs+n_jitters+6,1);
 param.Stimuli.ColumnLabels{1} = 'Start Screen';
 param.Stimuli.ColumnLabels{2} = 'Begin Video';
+stimuli_duration = 1;
 for idx=1:n_configs % stim codes 3:n_configs+2 are stim trials, 2 seconds long with the first second 
     i=idx+2;
     param.Stimuli.Value{1,i}   = ''; %caption
     param.Stimuli.Value{2,i}   = ''; %icon
     param.Stimuli.Value{3,i}   = ''; %av
     param.Stimuli.Value{4,i}   = ''; %interrupt
-    jitter = round((2*(rand)-1),2);
-    duration = 2; % 2s, first second stim, second is isi for ccep or start of the jitter.
-    param.Stimuli.Value{5,i}   = sprintf('%ds',duration); %duration
+    param.Stimuli.Value{5,i}   = sprintf('%ds',stimuli_duration); %duration
     param.Stimuli.ColumnLabels{i,1} = sprintf('stim config %d',idx);
 end
 
 % pause between blocks stimuli
 loc = n_configs+3;
+blockPause = 10; % seconds
 blockPause_stimCode = loc;
 param.Stimuli.Value{1,loc}   = ''; %Pause Between Blocks
 param.Stimuli.Value{2,loc}   = '';
@@ -319,13 +324,14 @@ param.Stimuli.Value{5,loc}   = '10s';
 param.Stimuli.ColumnLabels{loc,1} = sprintf('Block Pause');
 
 % CCEP stimuli 1
+CCEP_duration = .2; % seconds
 loc = n_configs+4;
 CCEP_stimcode_1 = loc;
 param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
 param.Stimuli.Value{2,loc}   = '';
 param.Stimuli.Value{3,loc}   = '';
 param.Stimuli.Value{4,loc}   = '';
-param.Stimuli.Value{5,loc}   = '1s';
+param.Stimuli.Value{5,loc}   = '200ms';
 param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
 
 % CCEP stimuli 2
@@ -335,21 +341,33 @@ param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
 param.Stimuli.Value{2,loc}   = '';
 param.Stimuli.Value{3,loc}   = '';
 param.Stimuli.Value{4,loc}   = '';
-param.Stimuli.Value{5,loc}   = '1s';
+param.Stimuli.Value{5,loc}   = '200ms';
 param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
 
-% pause after CCEP
+% CCEP Pause
 loc = n_configs+6;
 CCEP_pause_stimCode = loc;
 param.Stimuli.Value{1,loc}   = ''; %Pause after leading CCEP
 param.Stimuli.Value{2,loc}   = '';
 param.Stimuli.Value{3,loc}   = '';
 param.Stimuli.Value{4,loc}   = '';
-param.Stimuli.Value{5,loc}   = '1s';
+param.Stimuli.Value{5,loc}   = sprintf('%ds',CCEP_ISI);
 param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP Pause');
 
-% end of run stimuli
+%Reset Video
 loc = n_configs+7;
+vid_reset_duration = 0.2; % seconds
+vidReset_stimCode = loc;
+param.Stimuli.Value{1,loc}   = ''; 
+param.Stimuli.Value{2,loc}   = '';
+param.Stimuli.Value{3,loc}   = videoPath; %Reset Video
+param.Stimuli.Value{4,loc}   = '';
+param.Stimuli.Value{5,loc}   = sprintf('200ms');
+param.Stimuli.ColumnLabels{loc,1} = sprintf('Video Reset');
+
+
+% end of run stimuli
+loc = n_configs+8;
 endRun_stimcode = loc;
 param.Stimuli.Value{1,loc}   = 'End of Run';
 param.Stimuli.Value{2,loc}   = '';
@@ -361,10 +379,11 @@ param.Stimuli.ColumnLabels{loc} = sprintf('End Run');
 param.Stimuli.RowLabels    = stimRowLabs;
 
 jitter_idx = zeros(n_jitters,1);
+jitter_vals = zeros(n_jitters,1);
 if allowCCEPs
     baseTime = 2;
 else
-    baseTime = 3;
+    baseTime = 2 + 2*CCEP_ISI + 0.4; % 2s base plus both CCEP pauses + CCEPs durations (400 ms)
 end
 for j= loc+1:size(param.Stimuli.Value,2) % setup random jitters
     jitter = round((2*(rand)-1),2);
@@ -375,6 +394,7 @@ for j= loc+1:size(param.Stimuli.Value,2) % setup random jitters
     param.Stimuli.Value{5,j}   = sprintf('%ds',baseTime+jitter); %duration
     param.Stimuli.ColumnLabels{j,1} = sprintf('Jitter %d',j);
     jitter_idx(j-loc) = j;
+    jitter_vals(j-loc) = baseTime+jitter;
 end
 
 
@@ -391,7 +411,16 @@ param.Sequence.Value{1,1}    = '1'; % startup screen
 param.Sequence.Value{2,1}    = '2'; % begin movie
 idx = 3; % incrementer for trial sequence
 jitterLocs = [];
+experimentTime = videoStart_duration
 for i=1:size(trial_seq,1)
+
+    if experimentTime > vid_duration
+        %%%%%%%%%%%%
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
+        experimentTime = 0;
+        idx = idx +1;
+    end
+
 
     channelPair = find(cathodeChannels== trial_seq(i,5));
     if channelPair == 1
@@ -399,28 +428,76 @@ for i=1:size(trial_seq,1)
     elseif channelPair == 2
         CCEP_stimcode = CCEP_stimcode_2;
     end
+
     if allowCCEPs
-    param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % leading CCEP
-    idx = idx +1;
-    end
-    % removed this, was redundant
-    % param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % 1s Pause
-    % idx = idx +1;
-    param.Sequence.Value{idx,1}  = sprintf('%d',trial_seq(i,7)); % Stimulation
-    idx = idx +1;
-    if allowCCEPs
-    param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % lagging CCEP
-    idx = idx +1;
-    end
-    param.Sequence.Value{idx,1}  = sprintf('%d',jitter_idx(i)); % jittered ISI
-    idx = idx+1;
-    jitterLocs = [jitterLocs; idx];
-    if mod(i,n_configs)==0 && i~=size(trial_seq,1) % block pauses
-        param.Sequence.Value{idx,1}  = sprintf('%d',blockPause_stimCode);
-        
+        param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % leading CCEP
+        experimentTime = experimentTime + CCEP_duration;
+        idx = idx +1;
+        param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % CCEP Pause
+        experimentTime = experimentTime + CCEP_ISI;
         idx = idx +1;
     end
-        % param.Sequence.NumericValue(i+2,1)  = trial_seq(i,7);
+
+    if experimentTime > vid_duration
+        %%%%%%%%%%%%
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
+        experimentTime = 0;
+        idx = idx +1;
+    end
+
+    param.Sequence.Value{idx,1}  = sprintf('%d',trial_seq(i,7)); % Stimulation
+    experimentTime = experimentTime + stimuli_duration;
+    idx = idx +1;
+
+    if experimentTime > vid_duration
+        %%%%%%%%%%%%
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
+        experimentTime = 0;
+        idx = idx +1;
+    end
+
+    if allowCCEPs
+        param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % CCEP Pause
+        idx = idx +1;
+        experimentTime = experimentTime + CCEP_ISI;
+
+        param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % lagging CCEP
+        idx = idx +1;
+        experimentTime = experimentTime + CCEP_duration;
+    end
+
+    if experimentTime > vid_duration
+        %%%%%%%%%%%%
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
+        experimentTime = 0;
+        idx = idx +1;
+    end
+
+    param.Sequence.Value{idx,1}  = sprintf('%d',jitter_idx(i)); % jittered ISI
+    jitterLocs = [jitterLocs; idx];
+    experimentTime = experimentTime + jitter_vals(i);
+    idx = idx+1;
+
+    if experimentTime > vid_duration
+        %%%%%%%%%%%%
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
+        experimentTime = 0;
+        idx = idx +1;
+    end
+
+
+    if mod(i,n_configs)==0 && i~=size(trial_seq,1) % block pauses
+        param.Sequence.Value{idx,1}  = sprintf('%d',blockPause_stimCode);
+        experimentTime = experimentTime + blockPause;
+        idx = idx +1;
+    end
+
+    if experimentTime > vid_duration
+        %%%%%%%%%%%%
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
+        experimentTime = 0;
+        idx = idx +1;
+    end
 end
 param.Sequence.Value{end+1,1} = sprintf('%d',endRun_stimcode); % end
 
@@ -507,7 +584,19 @@ for i=1:length(parameter_lines)
     fprintf( fid, '\r\n' );
 end
 fclose(fid);
-
+%%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
 %% Stimulation Testing Parm Generation
 if numel(conditions2remove) == 0 && generateTest 
     % set up Stim Configs
@@ -604,6 +693,34 @@ if numel(conditions2remove) == 0 && generateTest
     fig = figure(1);
     % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
     set(gcf, 'Position', [1 1 1980 1080])
+    charge = stimMat_cathode(:,3).*stimMat_cathode(:,4).*stimMat_cathode(:,2)*8;
+    aggMat_cath = [stimMat_cathode charge];
+    [sort_cathode, sortIdx] = sortrows(aggMat_cath, [size(aggMat_cath,2),4,5],'ascend');
+    sort_anode = stimMat_anode(sortIdx,:);
+    sort_stimLabel = stimLabel(sortIdx);
+    sort_keyMap = keyMap';
+    sort_keyMap = sort_keyMap(sortIdx,:);
+    for i=1:numConfigs
+        subplot(3,numConfigs/3,i)
+        f_g = sort_cathode(i,6);
+        cath_g = sort_cathode(i,5);
+        anode_g = sort_anode(i,5);
+        amp_g = sort_cathode(i,4);
+        pw_g = sort_cathode(i,3);
+        np_g = sort_cathode(i,2);
+        charge_g = sort_cathode(i,end);
+        [t,y] = generate_theta_burst_waveform(f_g,amp_g);
+        plot(1000*t,y,'Linewidth',2,'Color','r')
+        xlim([0,200])
+        ylim([-0.5,2.5])
+        titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d\n%d nC per 1s train',sort_stimLabel(i),sort_keyMap{i,2},cath_g,anode_g,amp_g,f_g,pw_g,np_g, charge_g);
+        title(titleblock)
+        ylabel('amp (mA)')
+        xlabel('time (ms)')
+    end
+    fig2 = figure(2);
+    % % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
+    set(gcf, 'Position', [1 1 1980 1080])
     for i=1:numConfigs
         testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %d',TriggerExp,keyMap{2,i}); %Expression
         testing_param.StimulationTriggers.Value{2,2*i-1} = sprintf('%d',stimMat_cathode(i,8));%Config
@@ -634,7 +751,7 @@ if numel(conditions2remove) == 0 && generateTest
     end
     testing_param.StimulationTriggers.RowLabels = {'Expression';'Config ID'; 'Electrode(s)'};
     locDescriptions = cell2struct(stimDescription,stimDescription_labels,2);
-    saveas(1,cerestim_map_path);
+    % saveas(1,cerestim_map_path);
     exportgraphics(fig,cerestim_map_path,'Resolution',300);
     %% Setup Dynamic Mode
     testing_param.DynamicConfiguration.Section = 'CereStim';

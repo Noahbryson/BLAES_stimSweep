@@ -1,0 +1,57 @@
+%% Video Manipulation
+% takes a video and adds a patch in the lower left corner every ten seconds
+% for photodiode triggering. 
+root = 'C:\Paradigms';
+stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli'); % path to folder containing stimuli
+checkDir(stimuliDir);
+videos = dir(strcat(stimuliDir,'\','*.mp4'));
+video_num = 4;
+parmName_dec = videos(video_num).name(1:20);
+vidPath = fullfile(videos(video_num).folder,videos(video_num).name);
+
+savePath = fullfile('stimuli',sprintf('test_%s',videos(video_num).name));
+%%
+video = VideoReader(vidPath);
+%%
+duration = video.Duration;
+fps = video.FrameRate;
+numFrame = video.NumFrames;
+bigFactor = max(factor(numFrame));
+split = numFrame/bigFactor;
+h = video.Height;
+w = video.Width;
+%%
+writer = VideoWriter(savePath, 'MPEG-4');
+writer.FrameRate=fps;
+open(writer);
+framecount = 1;
+for i=1:split
+    current = read(video,[framecount, framecount+bigFactor]);
+    
+    if mod(i,3) == 0 
+        IMG = addPhotoPatch(current,255,h,w,endFrame-start);
+    else
+        IMG = addPhotoPatch(current,1,h,w,endFrame-start);
+    end
+    framecount = framecount+bigFactor+1;
+    writeVideo(writer,IMG);
+    fprintf('%d frame written, %d minutes of video\n',framecount,framecount*fps/60)
+end
+
+%%
+close(writer);
+
+
+%%
+function IMG = addPhotoPatch(IMG,color,height,width,numFrames)
+hspan = 0.9*height:1:height;
+wspan = 1:1:0.1*width;
+% for j=1:numFrames
+    % for i=1:3 %RGB layers
+    %     IMG(hspan,wspan,i,j) = color;
+    % end
+    IMG(hspan,wspan,:,:) = color;
+% end
+
+
+end
