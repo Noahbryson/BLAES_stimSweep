@@ -9,14 +9,3 @@ param = read_bciprm(fullfile(parms(2).folder,parms(2).name));
 map = parse_stimsweep_stimcodes(param);
 
 
-
-
-
-function StimMap = parse_stimsweep_stimcodes(param)
-stimcodes = param.Stimuli.Value;
-stimConfigs = param.StimulationConfigurations.Value;
-stimTriggers = param.StimulationTriggers.Value;
-config2code = cell();
-
-StimMap = 0;
-end
