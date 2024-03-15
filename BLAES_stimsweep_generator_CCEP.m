@@ -147,19 +147,19 @@ stimMat_cols = {'cathodeFirst' 'numPulses' 'pulseWidth' 'amp' 'channel' 'freq','
 channelCol = 5;
 % stim Amp Condition
 ampCol = 4;
-stimCode = 3; % stimCode 1&2 reserved for AV start sequence
+stimCode = 9; % stimCode 1&2 reserved for AV start sequence
 configID = 1;
 
 counter =0;
-for i=1:length(pulseWidth)
+for loc=1:length(pulseWidth)
     for j=1:length(stimAmps)
         for k=1:length(frequencies)
             for q=1:length(cathodeChannels)
 
-                if pulseWidth(i) > 250 && stimAmps(j) >= max(stimAmps) && rmHighestChargeCondition
+                if pulseWidth(loc) > 250 && stimAmps(j) >= max(stimAmps) && rmHighestChargeCondition
                     % do not pair 2 mA with 500 us PW
                 else
-                    temp = [1,num_pulses(k),pulseWidth(i),stimAmps(j),cathodeChannels(q),frequencies(k),stimCode,configID];
+                    temp = [1,num_pulses(k),pulseWidth(loc),stimAmps(j),cathodeChannels(q),frequencies(k),stimCode,configID];
                     counter = counter+1;
                     stimCode = stimCode+1;
                     stimMat_cathode = [stimMat_cathode; temp];
@@ -180,9 +180,9 @@ stimMat_anode(:,8) = stimMat_anode(:,8) + configID-1; %adjust configIDs
 
 
 % adjust channel to make bipolar pair
-for i=1:size(stimMat_anode,1)
-    idx = cathodeChannels == stimMat_anode(i,channelCol);
-    stimMat_anode(i,channelCol) = anodeChannels(idx);
+for loc=1:size(stimMat_anode,1)
+    idx = cathodeChannels == stimMat_anode(loc,channelCol);
+    stimMat_anode(loc,channelCol) = anodeChannels(idx);
 end
 numConfigs = size(stimMat_cathode,1);
 numParams = size(stimMat_cathode,2);
@@ -193,9 +193,9 @@ checkRepeatVal(seq,ampCol,max(stimAmps)); % amplitude column, ensures 2 mA is no
 start = 1;
 stop = numConfigs;
 trial_seq = zeros(numConfigs*num_blocks,numParams);
-for i=1:num_blocks
+for loc=1:num_blocks
     
-    if i == 1
+    if loc == 1
         multi = 0;
         amp_init = 0;
         chan_init = 0;
@@ -231,18 +231,18 @@ param.StimulationConfigurations.HighRange = '';
 param.StimulationConfigurations.Comment = 'Configurations for BLAES PARAM SWEEP';
 param.StimulationConfigurations.Value = cell(length(rowLabs),size(stim_configs,1)+2);
 
-for i=1:size(stim_configs,1)
-    param.StimulationConfigurations.Value{1, i}  = sprintf('%d',stim_configs(i,1));%cathode bool
-    param.StimulationConfigurations.Value{2, i}  = sprintf('%d',stim_configs(i,2));% n pulses
-    param.StimulationConfigurations.Value{3, i}  = sprintf('%d',stim_configs(i,4));% amp 1
-    param.StimulationConfigurations.Value{4, i}  = sprintf('%d',stim_configs(i,4));% amp 2
-    param.StimulationConfigurations.Value{5, i}  = sprintf('%d',stim_configs(i,3));%pw 1
-    param.StimulationConfigurations.Value{6, i}  = sprintf('%d',stim_configs(i,3));%pw 2
-    param.StimulationConfigurations.Value{7, i}  = sprintf('%d',stim_configs(i,6));%stim freq 
-    param.StimulationConfigurations.Value{8, i}  = sprintf('%d',53);%inter pulse duration (53 us min)
-    param.StimulationConfigurations.Value{9, i}  = sprintf('%d',1);% train duration 
-    param.StimulationConfigurations.Value{10,i}  = sprintf('%d',carrier_freq);% train freq 
-    param.StimulationConfigurations.ColumnLabels{i,1} = sprintf('Configuration %d',i);
+for loc=1:size(stim_configs,1)
+    param.StimulationConfigurations.Value{1, loc}  = sprintf('%d',stim_configs(loc,1));%cathode bool
+    param.StimulationConfigurations.Value{2, loc}  = sprintf('%d',stim_configs(loc,2));% n pulses
+    param.StimulationConfigurations.Value{3, loc}  = sprintf('%d',stim_configs(loc,4));% amp 1
+    param.StimulationConfigurations.Value{4, loc}  = sprintf('%d',stim_configs(loc,4));% amp 2
+    param.StimulationConfigurations.Value{5, loc}  = sprintf('%d',stim_configs(loc,3));%pw 1
+    param.StimulationConfigurations.Value{6, loc}  = sprintf('%d',stim_configs(loc,3));%pw 2
+    param.StimulationConfigurations.Value{7, loc}  = sprintf('%d',stim_configs(loc,6));%stim freq 
+    param.StimulationConfigurations.Value{8, loc}  = sprintf('%d',53);%inter pulse duration (53 us min)
+    param.StimulationConfigurations.Value{9, loc}  = sprintf('%d',1);% train duration 
+    param.StimulationConfigurations.Value{10,loc}  = sprintf('%d',carrier_freq);% train freq 
+    param.StimulationConfigurations.ColumnLabels{loc,1} = sprintf('Configuration %d',loc);
 end
 param.StimulationConfigurations.Value{1, end-1}  = sprintf('%d', 1);                %cathode bool
 param.StimulationConfigurations.Value{2, end-1}  = sprintf('%d', 1);                % n pulses
@@ -301,19 +301,9 @@ param.Stimuli.Value{5,2}   = sprintf('%ds',videoStart_duration);
 param.Stimuli.ColumnLabels = cell(n_configs+n_jitters+6,1);
 param.Stimuli.ColumnLabels{1} = 'Start Screen';
 param.Stimuli.ColumnLabels{2} = 'Begin Video';
-stimuli_duration = 1;
-for idx=1:n_configs % stim codes 3:n_configs+2 are stim trials, 2 seconds long with the first second 
-    i=idx+2;
-    param.Stimuli.Value{1,i}   = ''; %caption
-    param.Stimuli.Value{2,i}   = ''; %icon
-    param.Stimuli.Value{3,i}   = ''; %av
-    param.Stimuli.Value{4,i}   = ''; %interrupt
-    param.Stimuli.Value{5,i}   = sprintf('%ds',stimuli_duration); %duration
-    param.Stimuli.ColumnLabels{i,1} = sprintf('stim config %d',idx);
-end
 
 % pause between blocks stimuli
-loc = n_configs+3;
+loc = 3;
 blockPause = 10; % seconds
 blockPause_stimCode = loc;
 param.Stimuli.Value{1,loc}   = ''; %Pause Between Blocks
@@ -325,7 +315,7 @@ param.Stimuli.ColumnLabels{loc,1} = sprintf('Block Pause');
 
 % CCEP stimuli 1
 CCEP_duration = .2; % seconds
-loc = n_configs+4;
+loc = loc+1;
 CCEP_stimcode_1 = loc;
 param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
 param.Stimuli.Value{2,loc}   = '';
@@ -335,7 +325,7 @@ param.Stimuli.Value{5,loc}   = '200ms';
 param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
 
 % CCEP stimuli 2
-loc = n_configs+5;
+loc = loc+1;
 CCEP_stimcode_2 = loc;
 param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
 param.Stimuli.Value{2,loc}   = '';
@@ -345,7 +335,7 @@ param.Stimuli.Value{5,loc}   = '200ms';
 param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
 
 % CCEP Pause
-loc = n_configs+6;
+loc = loc+1;
 CCEP_pause_stimCode = loc;
 param.Stimuli.Value{1,loc}   = ''; %Pause after leading CCEP
 param.Stimuli.Value{2,loc}   = '';
@@ -355,7 +345,7 @@ param.Stimuli.Value{5,loc}   = sprintf('%ds',CCEP_ISI);
 param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP Pause');
 
 %Reset Video
-loc = n_configs+7;
+loc = loc+1;
 vid_reset_duration = 0.2; % seconds
 vidReset_stimCode = loc;
 param.Stimuli.Value{1,loc}   = ''; 
@@ -367,7 +357,7 @@ param.Stimuli.ColumnLabels{loc,1} = sprintf('Video Reset');
 
 
 % end of run stimuli
-loc = n_configs+8;
+loc = loc+1;
 endRun_stimcode = loc;
 param.Stimuli.Value{1,loc}   = 'End of Run';
 param.Stimuli.Value{2,loc}   = '';
@@ -375,6 +365,81 @@ param.Stimuli.Value{3,loc}   = '';
 param.Stimuli.Value{4,loc}   = 'Keydown==32';
 param.Stimuli.Value{5,loc}   = '40s';
 param.Stimuli.ColumnLabels{loc} = sprintf('End Run');
+
+stimuli_duration = 1;
+for idx=1:n_configs % stim codes 3:n_configs+2 are stim trials, 2 seconds long with the first second 
+    loc=idx+8;
+    param.Stimuli.Value{1,loc}   = ''; %caption
+    param.Stimuli.Value{2,loc}   = ''; %icon
+    param.Stimuli.Value{3,loc}   = ''; %av
+    param.Stimuli.Value{4,loc}   = ''; %interrupt
+    param.Stimuli.Value{5,loc}   = sprintf('%ds',stimuli_duration); %duration
+    param.Stimuli.ColumnLabels{loc,1} = sprintf('stim config %d',idx);
+end
+
+% % pause between blocks stimuli
+% loc = n_configs+3;
+% blockPause = 10; % seconds
+% blockPause_stimCode = loc;
+% param.Stimuli.Value{1,loc}   = ''; %Pause Between Blocks
+% param.Stimuli.Value{2,loc}   = '';
+% param.Stimuli.Value{3,loc}   = '';
+% param.Stimuli.Value{4,loc}   = '';
+% param.Stimuli.Value{5,loc}   = '10s';
+% param.Stimuli.ColumnLabels{loc,1} = sprintf('Block Pause');
+% 
+% % CCEP stimuli 1
+% CCEP_duration = .2; % seconds
+% loc = n_configs+4;
+% CCEP_stimcode_1 = loc;
+% param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
+% param.Stimuli.Value{2,loc}   = '';
+% param.Stimuli.Value{3,loc}   = '';
+% param.Stimuli.Value{4,loc}   = '';
+% param.Stimuli.Value{5,loc}   = '200ms';
+% param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
+% 
+% % CCEP stimuli 2
+% loc = n_configs+5;
+% CCEP_stimcode_2 = loc;
+% param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
+% param.Stimuli.Value{2,loc}   = '';
+% param.Stimuli.Value{3,loc}   = '';
+% param.Stimuli.Value{4,loc}   = '';
+% param.Stimuli.Value{5,loc}   = '200ms';
+% param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
+% 
+% % CCEP Pause
+% loc = n_configs+6;
+% CCEP_pause_stimCode = loc;
+% param.Stimuli.Value{1,loc}   = ''; %Pause after leading CCEP
+% param.Stimuli.Value{2,loc}   = '';
+% param.Stimuli.Value{3,loc}   = '';
+% param.Stimuli.Value{4,loc}   = '';
+% param.Stimuli.Value{5,loc}   = sprintf('%ds',CCEP_ISI);
+% param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP Pause');
+% 
+% %Reset Video
+% loc = n_configs+7;
+% vid_reset_duration = 0.2; % seconds
+% vidReset_stimCode = loc;
+% param.Stimuli.Value{1,loc}   = ''; 
+% param.Stimuli.Value{2,loc}   = '';
+% param.Stimuli.Value{3,loc}   = videoPath; %Reset Video
+% param.Stimuli.Value{4,loc}   = '';
+% param.Stimuli.Value{5,loc}   = sprintf('200ms');
+% param.Stimuli.ColumnLabels{loc,1} = sprintf('Video Reset');
+% 
+% 
+% % end of run stimuli
+% loc = n_configs+8;
+% endRun_stimcode = loc;
+% param.Stimuli.Value{1,loc}   = 'End of Run';
+% param.Stimuli.Value{2,loc}   = '';
+% param.Stimuli.Value{3,loc}   = '';
+% param.Stimuli.Value{4,loc}   = 'Keydown==32';
+% param.Stimuli.Value{5,loc}   = '40s';
+% param.Stimuli.ColumnLabels{loc} = sprintf('End Run');
 
 param.Stimuli.RowLabels    = stimRowLabs;
 
@@ -412,7 +477,7 @@ param.Sequence.Value{2,1}    = '2'; % begin movie
 idx = 3; % incrementer for trial sequence
 jitterLocs = [];
 experimentTime = videoStart_duration
-for i=1:size(trial_seq,1)
+for loc=1:size(trial_seq,1)
 
     if experimentTime > vid_duration
         %%%%%%%%%%%%
@@ -422,7 +487,7 @@ for i=1:size(trial_seq,1)
     end
 
 
-    channelPair = find(cathodeChannels== trial_seq(i,5));
+    channelPair = find(cathodeChannels== trial_seq(loc,5));
     if channelPair == 1
         CCEP_stimcode = CCEP_stimcode_1;
     elseif channelPair == 2
@@ -445,7 +510,7 @@ for i=1:size(trial_seq,1)
         idx = idx +1;
     end
 
-    param.Sequence.Value{idx,1}  = sprintf('%d',trial_seq(i,7)); % Stimulation
+    param.Sequence.Value{idx,1}  = sprintf('%d',trial_seq(loc,7)); % Stimulation
     experimentTime = experimentTime + stimuli_duration;
     idx = idx +1;
 
@@ -473,9 +538,9 @@ for i=1:size(trial_seq,1)
         idx = idx +1;
     end
 
-    param.Sequence.Value{idx,1}  = sprintf('%d',jitter_idx(i)); % jittered ISI
+    param.Sequence.Value{idx,1}  = sprintf('%d',jitter_idx(loc)); % jittered ISI
     jitterLocs = [jitterLocs; idx];
-    experimentTime = experimentTime + jitter_vals(i);
+    experimentTime = experimentTime + jitter_vals(loc);
     idx = idx+1;
 
     if experimentTime > vid_duration
@@ -486,7 +551,7 @@ for i=1:size(trial_seq,1)
     end
 
 
-    if mod(i,n_configs)==0 && i~=size(trial_seq,1) % block pauses
+    if mod(loc,n_configs)==0 && loc~=size(trial_seq,1) % block pauses
         param.Sequence.Value{idx,1}  = sprintf('%d',blockPause_stimCode);
         experimentTime = experimentTime + blockPause;
         idx = idx +1;
@@ -519,16 +584,16 @@ param.StimulationTriggers.DefaultValue = '';
 param.StimulationTriggers.LowRange = '';
 param.StimulationTriggers.HighRange = '';
 param.StimulationTriggers.Comment = 'Trigger Library for BLAES PARAM SWEEP';
-for i=1:numConfigs
-    param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %d',TriggerExp,stimMat_cathode(i,7)); %Expression
-    param.StimulationTriggers.Value{2,2*i-1} = sprintf('%d',stimMat_cathode(i,8));%Config
-    param.StimulationTriggers.Value{3,2*i-1} = sprintf('%d',stimMat_cathode(i,5));%Electrode
-    param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %d',TriggerExp,stimMat_anode(i,7)); %Expression
-    param.StimulationTriggers.Value{2,2*i}   = sprintf('%d',stimMat_anode(i,8));%Config
-    param.StimulationTriggers.Value{3,2*i}   = sprintf('%d',stimMat_anode(i,5));%Electrode
+for loc=1:numConfigs
+    param.StimulationTriggers.Value{1,2*loc-1} = sprintf('%s == %d',TriggerExp,stimMat_cathode(loc,7)); %Expression
+    param.StimulationTriggers.Value{2,2*loc-1} = sprintf('%d',stimMat_cathode(loc,8));%Config
+    param.StimulationTriggers.Value{3,2*loc-1} = sprintf('%d',stimMat_cathode(loc,5));%Electrode
+    param.StimulationTriggers.Value{1,2*loc}   = sprintf('%s == %d',TriggerExp,stimMat_anode(loc,7)); %Expression
+    param.StimulationTriggers.Value{2,2*loc}   = sprintf('%d',stimMat_anode(loc,8));%Config
+    param.StimulationTriggers.Value{3,2*loc}   = sprintf('%d',stimMat_anode(loc,5));%Electrode
 
-    param.StimulationTriggers.ColumnLabels{2*i-1,1} = sprintf('Trigger %d',2*i-1);
-    param.StimulationTriggers.ColumnLabels{2*i,1}   = sprintf('Trigger %d',2*i);
+    param.StimulationTriggers.ColumnLabels{2*loc-1,1} = sprintf('Trigger %d',2*loc-1);
+    param.StimulationTriggers.ColumnLabels{2*loc,1}   = sprintf('Trigger %d',2*loc);
 end
 %CCEPs, need a trigger for each channel pair.
 % channel pair 1
@@ -579,8 +644,8 @@ filename = fullfile(parmDir,fname);
 parameter_lines = convert_bciprm( param );
 fid = fopen(filename, 'w');
 
-for i=1:length(parameter_lines)
-    fprintf( fid, '%s', parameter_lines{i} );
+for loc=1:length(parameter_lines)
+    fprintf( fid, '%s', parameter_lines{loc} );
     fprintf( fid, '\r\n' );
 end
 fclose(fid);
@@ -609,18 +674,18 @@ if numel(conditions2remove) == 0 && generateTest
     testing_param.StimulationConfigurations.Comment = 'Configurations for BLAES PARAM SWEEP';
     testing_param.StimulationConfigurations.Value = cell(length(rowLabs),size(stim_configs,1));
     
-    for i=1:size(stim_configs,1)
-        testing_param.StimulationConfigurations.Value{1, i}  = sprintf('%d',stim_configs(i,1));
-        testing_param.StimulationConfigurations.Value{2, i}  = sprintf('%d',stim_configs(i,2));
-        testing_param.StimulationConfigurations.Value{3, i}  = sprintf('%d',stim_configs(i,4));
-        testing_param.StimulationConfigurations.Value{4, i}  = sprintf('%d',stim_configs(i,4));
-        testing_param.StimulationConfigurations.Value{5, i}  = sprintf('%d',stim_configs(i,3));
-        testing_param.StimulationConfigurations.Value{6, i}  = sprintf('%d',stim_configs(i,3));
-        testing_param.StimulationConfigurations.Value{7, i}  = sprintf('%d',stim_configs(i,6));
-        testing_param.StimulationConfigurations.Value{8, i}  = sprintf('%d',53);
-        testing_param.StimulationConfigurations.Value{9, i}  = sprintf('%d',1);
-        testing_param.StimulationConfigurations.Value{10,i}  = sprintf('%d',8);
-        testing_param.StimulationConfigurations.ColumnLabels{i,1} = sprintf('Configuration %d',i);
+    for loc=1:size(stim_configs,1)
+        testing_param.StimulationConfigurations.Value{1, loc}  = sprintf('%d',stim_configs(loc,1));
+        testing_param.StimulationConfigurations.Value{2, loc}  = sprintf('%d',stim_configs(loc,2));
+        testing_param.StimulationConfigurations.Value{3, loc}  = sprintf('%d',stim_configs(loc,4));
+        testing_param.StimulationConfigurations.Value{4, loc}  = sprintf('%d',stim_configs(loc,4));
+        testing_param.StimulationConfigurations.Value{5, loc}  = sprintf('%d',stim_configs(loc,3));
+        testing_param.StimulationConfigurations.Value{6, loc}  = sprintf('%d',stim_configs(loc,3));
+        testing_param.StimulationConfigurations.Value{7, loc}  = sprintf('%d',stim_configs(loc,6));
+        testing_param.StimulationConfigurations.Value{8, loc}  = sprintf('%d',53);
+        testing_param.StimulationConfigurations.Value{9, loc}  = sprintf('%d',1);
+        testing_param.StimulationConfigurations.Value{10,loc}  = sprintf('%d',8);
+        testing_param.StimulationConfigurations.ColumnLabels{loc,1} = sprintf('Configuration %d',loc);
     end
     testing_param.StimulationConfigurations.RowLabels = rowLabs;
     
@@ -693,27 +758,28 @@ if numel(conditions2remove) == 0 && generateTest
     fig = figure(1);
     % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
     set(gcf, 'Position', [1 1 1980 1080])
-    charge = stimMat_cathode(:,3).*stimMat_cathode(:,4).*stimMat_cathode(:,2)*8;
+    charge = stimMat_cathode(:,3).*stimMat_cathode(:,4).*stimMat_cathode(:,2)*carrier_freq*stimuli_duration;
+    % https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5386002/
     aggMat_cath = [stimMat_cathode charge];
     [sort_cathode, sortIdx] = sortrows(aggMat_cath, [size(aggMat_cath,2),4,5],'ascend');
     sort_anode = stimMat_anode(sortIdx,:);
     sort_stimLabel = stimLabel(sortIdx);
     sort_keyMap = keyMap';
     sort_keyMap = sort_keyMap(sortIdx,:);
-    for i=1:numConfigs
-        subplot(3,numConfigs/3,i)
-        f_g = sort_cathode(i,6);
-        cath_g = sort_cathode(i,5);
-        anode_g = sort_anode(i,5);
-        amp_g = sort_cathode(i,4);
-        pw_g = sort_cathode(i,3);
-        np_g = sort_cathode(i,2);
-        charge_g = sort_cathode(i,end);
+    for loc=1:numConfigs
+        subplot(3,numConfigs/3,loc)
+        f_g = sort_cathode(loc,6);
+        cath_g = sort_cathode(loc,5);
+        anode_g = sort_anode(loc,5);
+        amp_g = sort_cathode(loc,4);
+        pw_g = sort_cathode(loc,3);
+        np_g = sort_cathode(loc,2);
+        charge_g = sort_cathode(loc,end);
         [t,y] = generate_theta_burst_waveform(f_g,amp_g);
         plot(1000*t,y,'Linewidth',2,'Color','r')
         xlim([0,200])
         ylim([-0.5,2.5])
-        titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d\n%d nC per 1s train',sort_stimLabel(i),sort_keyMap{i,2},cath_g,anode_g,amp_g,f_g,pw_g,np_g, charge_g);
+        titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d\n%d nC per 1s train',sort_stimLabel(loc),sort_keyMap{loc,2},cath_g,anode_g,amp_g,f_g,pw_g,np_g, charge_g);
         title(titleblock)
         ylabel('amp (mA)')
         xlabel('time (ms)')
@@ -721,33 +787,33 @@ if numel(conditions2remove) == 0 && generateTest
     fig2 = figure(2);
     % % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
     set(gcf, 'Position', [1 1 1980 1080])
-    for i=1:numConfigs
-        testing_param.StimulationTriggers.Value{1,2*i-1} = sprintf('%s == %d',TriggerExp,keyMap{2,i}); %Expression
-        testing_param.StimulationTriggers.Value{2,2*i-1} = sprintf('%d',stimMat_cathode(i,8));%Config
-        testing_param.StimulationTriggers.Value{3,2*i-1} = sprintf('%d',stimMat_cathode(i,5));%Electrode
-        subplot(3,numConfigs/3,i)
-        f_g = stimMat_cathode(i,6);
-        cath_g = stimMat_cathode(i,5);
-        anode_g = stimMat_anode(i,5);
-        amp_g = stimMat_cathode(i,4);
-        pw_g = stimMat_cathode(i,3);
-        np_g = stimMat_cathode(i,2);
+    for loc=1:numConfigs
+        testing_param.StimulationTriggers.Value{1,2*loc-1} = sprintf('%s == %d',TriggerExp,keyMap{2,loc}); %Expression
+        testing_param.StimulationTriggers.Value{2,2*loc-1} = sprintf('%d',stimMat_cathode(loc,8));%Config
+        testing_param.StimulationTriggers.Value{3,2*loc-1} = sprintf('%d',stimMat_cathode(loc,5));%Electrode
+        subplot(3,numConfigs/3,loc)
+        f_g = stimMat_cathode(loc,6);
+        cath_g = stimMat_cathode(loc,5);
+        anode_g = stimMat_anode(loc,5);
+        amp_g = stimMat_cathode(loc,4);
+        pw_g = stimMat_cathode(loc,3);
+        np_g = stimMat_cathode(loc,2);
         [t,y] = generate_theta_burst_waveform(f_g,amp_g);
         plot(1000*t,y,'Linewidth',2,'Color','r')
         xlim([0,200])
         ylim([-0.5,2.5])
-        titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d',stimLabel(i),keyMap{2,i},cath_g,anode_g,amp_g,f_g,pw_g,np_g);
+        titleblock = sprintf('Combination #%d, Key %s \n [Cathode, Anode]: [%d, %d]\namp: %d mA, f: %d Hz\npw: %d us, np: %d',stimLabel(loc),keyMap{2,loc},cath_g,anode_g,amp_g,f_g,pw_g,np_g);
         title(titleblock)
         ylabel('amp (mA)')
         xlabel('time (ms)')
-        stimDescription{i,9} = keyMap{1,i};
-        stimDescription{i,10} = keyMap{2,i};
-        testing_param.StimulationTriggers.Value{1,2*i}   = sprintf('%s == %d',TriggerExp,keyMap{2,i}); %Expression
-        testing_param.StimulationTriggers.Value{2,2*i}   = sprintf('%d',stimMat_anode(i,8));%Config
-        testing_param.StimulationTriggers.Value{3,2*i}   = sprintf('%d',stimMat_anode(i,5));%Electrode
+        stimDescription{loc,9} = keyMap{1,loc};
+        stimDescription{loc,10} = keyMap{2,loc};
+        testing_param.StimulationTriggers.Value{1,2*loc}   = sprintf('%s == %d',TriggerExp,keyMap{2,loc}); %Expression
+        testing_param.StimulationTriggers.Value{2,2*loc}   = sprintf('%d',stimMat_anode(loc,8));%Config
+        testing_param.StimulationTriggers.Value{3,2*loc}   = sprintf('%d',stimMat_anode(loc,5));%Electrode
     
-        testing_param.StimulationTriggers.ColumnLabels{2*i-1,1} = sprintf('Trigger %d',2*i-1);
-        testing_param.StimulationTriggers.ColumnLabels{2*i,1}   = sprintf('Trigger %d',2*i);
+        testing_param.StimulationTriggers.ColumnLabels{2*loc-1,1} = sprintf('Trigger %d',2*loc-1);
+        testing_param.StimulationTriggers.ColumnLabels{2*loc,1}   = sprintf('Trigger %d',2*loc);
     end
     testing_param.StimulationTriggers.RowLabels = {'Expression';'Config ID'; 'Electrode(s)'};
     locDescriptions = cell2struct(stimDescription,stimDescription_labels,2);
@@ -777,8 +843,8 @@ if numel(conditions2remove) == 0 && generateTest
     parameter_lines = convert_bciprm( testing_param );
     fid = fopen(filename, 'w');
     
-    for i=1:length(parameter_lines)
-        fprintf( fid, '%s', parameter_lines{i} );
+    for loc=1:length(parameter_lines)
+        fprintf( fid, '%s', parameter_lines{loc} );
         fprintf( fid, '\r\n' );
     end
     fclose(fid);
@@ -899,16 +965,16 @@ function isAllStringsOrCells = checkStructFields(structure)
     end
 end
 
-function bci2ktools(BCI2KPath)
-olddir = pwd;
-cd(BCI2KPath);
-cd tools, cd matlab;
-bci2000path -AddToMatlabPath tools/matlab;
-bci2000path -AddToMatlabPath tools/mex;
-bci2000path -AddToSystemPath tools/cmdline;   % required so that BCI2000CHAIN can call the command-line tools
-cd(olddir); % change directory back to where we were before
-clear olddir;
-end
+% function bci2ktools(BCI2KPath)
+% olddir = pwd;
+% cd(BCI2KPath);
+% cd tools, cd matlab;
+% bci2000path -AddToMatlabPath tools/matlab;
+% bci2000path -AddToMatlabPath tools/mex;
+% bci2000path -AddToSystemPath tools/cmdline;   % required so that BCI2000CHAIN can call the command-line tools
+% cd(olddir); % change directory back to where we were before
+% clear olddir;
+% end
 
 function x = rm_combinations(input, idx2remove)
 

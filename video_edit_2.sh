@@ -15,7 +15,8 @@ for video in "${VIDEO_DIR}"/*.mp4; do
     filename=$(basename "$video" .mp4)
     
     # Define output video path
-    output="${OUTPUT_DIR}/${filename}_processed.mp4"
+    mid="${OUTPUT_DIR}/${filename}_trimmed.mp4"
+	output="${OUTPUT_DIR}/${filename}_processed.mp4"
     
     # Get the frame rate of the video
     fps=$(ffprobe -v 0 -of csv=p=0 -select_streams v:0 -show_entries stream=r_frame_rate "$video" | bc)
@@ -27,8 +28,9 @@ for video in "${VIDEO_DIR}"/*.mp4; do
     
     # FFmpeg command to add a black box that's always there
     # and a white box that appears for the specified duration every interval
-    ffmpeg -i "$video" -filter_complex "drawbox=x=0:y=ih-ih*0.1:w=iw*0.1:h=ih*0.1:color=black@1:t=fill, drawbox=x=0:y=ih-ih*0.1:w=iw*0.1:h=ih*0.1:color=white@1:t=fill:enable='between(mod(t,${interval}),0,${duration})'" -codec:a copy "$output"
-    
+    ffmpeg -i "$video" -filter_complex "drawbox=x=0:y=ih-ih*0.1:w=iw*0.1:h=ih*0.1:color=black@1:t=fill, drawbox=x=0:y=ih-ih*0.1:w=iw*0.1:h=ih*0.1:color=white@1:t=fill:enable='between(mod(t,${interval}),0,${duration})'" -codec:a copy "$mid"
+    ffmpeg -i "$video" -vf "scale=2560:-1, crop=2560:1440:0:(ih-1440)/2" -codec:a copy "$output"
+
     echo "Processed: $output"
 done
 
