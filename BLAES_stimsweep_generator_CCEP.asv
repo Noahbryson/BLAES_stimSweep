@@ -94,7 +94,7 @@ video_num = 1; % video index, name and number below
 %  4:   Bob Ross - One Hour Special - The Grandeur of Summer.mp4'
 %  5:   y2mate.com - Great Inventions  60 Minutes Full Episodes_720p.mp4'                }
 
-conditions2remove = [1 2 5 6 23 24];% add the numeric value as they appear on the testing image
+conditions2remove = [1 2 5 6];% add the numeric value as they appear on the testing image
 generateTest = 1; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
 rmHighestChargeCondition = 0; % set to 1 if removing highest amplitude-pulsewidth pair
 allowCCEPs = 1; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
@@ -996,11 +996,11 @@ if redoIndexing
     x(:,7) = newStimCodes;
     newConfigs = zeros(size(x,1),1);
     num = stimConfigStart;
-    for i=1:size(x,1)/2
+    for i=1:stimcodeStart+size(x,1)/2
         newConfigs(2*i-1) = num;
         newConfigs(2*i) = num;
         num = num+1;
     end
-    x(:,8) = newConfigs;
+    x(:,8) = ne
 end
 end

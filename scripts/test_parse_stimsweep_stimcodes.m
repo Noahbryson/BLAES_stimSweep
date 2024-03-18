@@ -6,6 +6,6 @@ parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep'); % path to write par
 checkDir(parmDir);
 parms = dir(strcat(parmDir,'\','*.prm'));
 param = read_bciprm(fullfile(parms(2).folder,parms(2).name));
-map = parse_stimsweep_stimcodes(param);
+stimMap = parse_stimsweep_stimcodes(param);
 
 
