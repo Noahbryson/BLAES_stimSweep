@@ -94,7 +94,7 @@ video_num = 1; % video index, name and number below
 %  4:   Bob Ross - One Hour Special - The Grandeur of Summer.mp4'
 %  5:   y2mate.com - Great Inventions  60 Minutes Full Episodes_720p.mp4'                }
 
-conditions2remove = [1 2 5 6 23 24];% add the numeric value as they appear on the testing image
+conditions2remove = [];% add the numeric value as they appear on the testing image
 generateTest = 1; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
 rmHighestChargeCondition = 0; % set to 1 if removing highest amplitude-pulsewidth pair
 allowCCEPs = 1; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
@@ -758,13 +758,13 @@ if numel(conditions2remove) == 0 && generateTest
     stimDescription_labels{end+1} = 'keypress_value';
     fig = figure(1);
     % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
-    set(gcf, 'Position', [1 1 2560 1440])
+    set(gcf, 'Position', [1 1 2560 1080])
     
     chargeDensity = stimMat_cathode(:,3).*stimMat_cathode(:,4).*stimMat_cathode(:,2)*carrier_freq*stimuli_duration * 1e-6 / (electrodeSurfaceArea*0.01); % us * uA * numPulses * Hz * s/cm^2 = pC/cm^2 -> pC/cm^2 * 1e-6 = uC/cm^2
     chargeDensityPerPhase = stimMat_cathode(:,3).*stimMat_cathode(:,4)* 1e-6 / (electrodeSurfaceArea*0.01); % us * uA/cm^2= pC/cm^2-> pC/cm^2 *1e-6 = uC/cm^2
     % https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5386002/
     aggMat_cath = [stimMat_cathode chargeDensity chargeDensityPerPhase];
-    [sort_cathode, sortIdx] = sortrows(aggMat_cath, [size(aggMat_cath,2),4,5],'ascend');
+    [sort_cathode, sortIdx] = sortrows(aggMat_cath, [size(aggMat_cath,2)-1,4,5],'ascend');
     sort_anode = stimMat_anode(sortIdx,:);
     sort_stimLabel = stimLabel(sortIdx);
     sort_keyMap = keyMap';
