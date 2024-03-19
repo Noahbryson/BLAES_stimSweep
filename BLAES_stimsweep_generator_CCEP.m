@@ -452,7 +452,7 @@ else
     baseTime = 2 + 2*CCEP_ISI + 0.4; % 2s base plus both CCEP pauses + CCEPs durations (400 ms)
 end
 for j= loc+1:size(param.Stimuli.Value,2) % setup random jitters
-    jitter = round((2*(rand)-1),2);
+    jitter = round((2*(rand)-1),1);
     param.Stimuli.Value{1,j}   = ''; %caption
     param.Stimuli.Value{2,j}   = ''; %icon
     param.Stimuli.Value{3,j}   = ''; %av
@@ -763,8 +763,8 @@ if numel(conditions2remove) == 0 && generateTest
     chargeDensity = stimMat_cathode(:,3).*stimMat_cathode(:,4).*stimMat_cathode(:,2)*carrier_freq*stimuli_duration * 1e-6 / (electrodeSurfaceArea*0.01); % us * uA * numPulses * Hz * s/cm^2 = pC/cm^2 -> pC/cm^2 * 1e-6 = uC/cm^2
     chargeDensityPerPhase = stimMat_cathode(:,3).*stimMat_cathode(:,4)* 1e-6 / (electrodeSurfaceArea*0.01); % us * uA/cm^2= pC/cm^2-> pC/cm^2 *1e-6 = uC/cm^2
     % https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5386002/
-    aggMat_cath = [stimMat_cathode chargeDensity chargeDensityPerPhase];
-    [sort_cathode, sortIdx] = sortrows(aggMat_cath, [size(aggMat_cath,2)-1,4,5],'ascend');
+    aggMat_cath = [stimMat_cathode stimLabel chargeDensity chargeDensityPerPhase];
+    [sort_cathode, sortIdx] = sortrows(aggMat_cath, [size(aggMat_cath,2)-1,4,size(aggMat_cath,2)-2],'ascend');
     sort_anode = stimMat_anode(sortIdx,:);
     sort_stimLabel = stimLabel(sortIdx);
     sort_keyMap = keyMap';
