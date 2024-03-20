@@ -86,7 +86,7 @@ num_pulses =  [3,  4,  6]; % optional parameter, fill in for number of pulses as
 %       If the numel between the two is not equal, num_pulses will be dynamically assigned
 electrodeSurfaceArea = 5; %mm^2, should be the same for all sites, but verify to be sure. 
 carrier_freq = 8; 
-num_blocks = 25; % number of trials for each condition, each block contains one trial of each condition. 
+num_blocks = 60; % number of trials for each condition, each block contains one trial of each condition. 
 video_num = 1; % video index, name and number below
 %  1:   1 Year of Growing Food - A whole season of vegetable gardening.mp4'
 %  2:   2 Hours of Digital Art.mp4'
@@ -95,7 +95,7 @@ video_num = 1; % video index, name and number below
 %  5:   y2mate.com - Great Inventions  60 Minutes Full Episodes_720p.mp4'                }
 
 conditions2remove = [];% add the numeric value as they appear on the testing image
-generateTest = 1; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
+generateTest = 0; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
 rmHighestChargeCondition = 0; % set to 1 if removing highest amplitude-pulsewidth pair
 allowCCEPs = 1; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
 CCEP_amplitude = 2000; % uA
@@ -356,7 +356,6 @@ param.Stimuli.Value{4,loc}   = '';
 param.Stimuli.Value{5,loc}   = sprintf('200ms');
 param.Stimuli.ColumnLabels{loc,1} = sprintf('Video Reset');
 
-
 % end of run stimuli
 loc = loc+1;
 endRun_stimcode = loc;
@@ -477,13 +476,16 @@ param.Sequence.Value{1,1}    = '1'; % startup screen
 param.Sequence.Value{2,1}    = '2'; % begin movie
 idx = 3; % incrementer for trial sequence
 jitterLocs = [];
-experimentTime = videoStart_duration
+experimentTime = videoStart_duration;
+vidResetTracker = experimentTime;
+numResets = 0;
 for loc=1:size(trial_seq,1)
+    % fprintf('%d exp time %d vid duration\n',experimentTime,vid_duration)
 
-    if experimentTime > vid_duration
-        %%%%%%%%%%%%
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
-        experimentTime = 0;
+    if vidResetTracker > vid_duration
+        numResets = numResets +1
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        vidResetTracker = 0;
         idx = idx +1;
     end
 
@@ -497,75 +499,84 @@ for loc=1:size(trial_seq,1)
 
     if allowCCEPs
         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % leading CCEP
+        vidResetTracker = vidResetTracker + CCEP_duration;
         experimentTime = experimentTime + CCEP_duration;
         idx = idx +1;
         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % CCEP Pause
+        vidResetTracker = vidResetTracker + CCEP_ISI;
         experimentTime = experimentTime + CCEP_ISI;
         idx = idx +1;
     end
 
-    if experimentTime > vid_duration
-        %%%%%%%%%%%%
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
-        experimentTime = 0;
+    if vidResetTracker > vid_duration
+        numResets = numResets +1
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        vidResetTracker = 0;
         idx = idx +1;
     end
 
     param.Sequence.Value{idx,1}  = sprintf('%d',trial_seq(loc,7)); % Stimulation
+    vidResetTracker = vidResetTracker + stimuli_duration;
     experimentTime = experimentTime + stimuli_duration;
     idx = idx +1;
 
-    if experimentTime > vid_duration
-        %%%%%%%%%%%%
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
-        experimentTime = 0;
+    if vidResetTracker > vid_duration
+        numResets = numResets +1
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        vidResetTracker = 0;
         idx = idx +1;
     end
 
     if allowCCEPs
         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % CCEP Pause
         idx = idx +1;
+        vidResetTracker = vidResetTracker + CCEP_ISI;
         experimentTime = experimentTime + CCEP_ISI;
 
         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % lagging CCEP
         idx = idx +1;
+        vidResetTracker = vidResetTracker + CCEP_duration;
         experimentTime = experimentTime + CCEP_duration;
     end
 
-    if experimentTime > vid_duration
-        %%%%%%%%%%%%
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
-        experimentTime = 0;
+    if vidResetTracker > vid_duration
+        numResets = numResets +1
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        vidResetTracker = 0;
         idx = idx +1;
     end
 
     param.Sequence.Value{idx,1}  = sprintf('%d',jitter_idx(loc)); % jittered ISI
     jitterLocs = [jitterLocs; idx];
+    vidResetTracker = vidResetTracker + jitter_vals(loc);
     experimentTime = experimentTime + jitter_vals(loc);
     idx = idx+1;
 
-    if experimentTime > vid_duration
-        %%%%%%%%%%%%
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
-        experimentTime = 0;
+    if vidResetTracker > vid_duration
+        numResets = numResets +1
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        vidResetTracker = 0;
         idx = idx +1;
     end
 
 
     if mod(loc,n_configs)==0 && loc~=size(trial_seq,1) % block pauses
         param.Sequence.Value{idx,1}  = sprintf('%d',blockPause_stimCode);
+        vidResetTracker = vidResetTracker + blockPause;
         experimentTime = experimentTime + blockPause;
         idx = idx +1;
     end
 
-    if experimentTime > vid_duration
-        %%%%%%%%%%%%
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
-        experimentTime = 0;
+    if vidResetTracker > vid_duration
+        numResets = numResets +1
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        vidResetTracker = 0;
         idx = idx +1;
     end
+    
 end
 param.Sequence.Value{end+1,1} = sprintf('%d',endRun_stimcode); % end
+fprintf('%d exp time %d vid duration',experimentTime,vid_duration)
 
 %% sequence type
 param.SequenceType.Section       = 'Application';
