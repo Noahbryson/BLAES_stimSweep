@@ -759,7 +759,7 @@ if numel(conditions2remove) == 0 && generateTest
     fig = figure(1);
     % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
     set(gcf, 'Position', [1 1 2560 1080])
-    sgtitle(sprintf('Load Configuration with Indicated Key\nPress ENTER to Deliver Stimulation'),'FontSize',18)
+    sgtitle(sprintf('Load Configuration with Indicated Key\nPress ENTER to Deliver Stimulation'),)
     chargeDensity = stimMat_cathode(:,3).*stimMat_cathode(:,4).*stimMat_cathode(:,2)*carrier_freq*stimuli_duration * 1e-6 / (electrodeSurfaceArea*0.01); % us * uA * numPulses * Hz * s/cm^2 = pC/cm^2 -> pC/cm^2 * 1e-6 = uC/cm^2
     chargeDensityPerPhase = stimMat_cathode(:,3).*stimMat_cathode(:,4)* 1e-6 / (electrodeSurfaceArea*0.01); % us * uA/cm^2= pC/cm^2-> pC/cm^2 *1e-6 = uC/cm^2
     % https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5386002/
