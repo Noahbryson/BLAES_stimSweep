@@ -71,8 +71,13 @@
 %   excluding a 1 mA condition will cause this to break unfortunately,
 %   since the pseduorandomization uses recursive methods to ensure rules
 %   about amplitude and channels are not violated. 
-
-BCI2KPath = 'C:\BCI2000\BCI2000'; % Set the path of the BCI2000 main directory here
+                                    
+BCI2KPath = '/Users/nkb/Documents/BCI2000tools'; % Set the path of the BCI2000 main directory here
+% noah windows path 'C:\BCI2000\BCI2000'
+% noah mac path: '/Users/nkb/Documents/BCI2000tools'
+% utah path
+% bigcart path
+% smallcart path
 % enter stim channels, different at WU vs UU as WU plugs in hardware
 % manually due to number of recording channels.
 cathodeChannels = [1, 3]; % cathode leading stim channels passed to stimulator 
@@ -98,18 +103,18 @@ conditions2remove = [];% add the numeric value as they appear on the testing ima
 generateTest = 0; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
 rmHighestChargeCondition = 0; % set to 1 if removing highest amplitude-pulsewidth pair
 allowCCEPs = 1; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
-CCEP_amplitude = 2000; % uA
+CCEP_amplitude = 1000; % uA
 CCEP_ISI = 1; % sec, duration following a CCEP 
 % Pathing
 root = 'C:\Paradigms';
-stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli'); % path to folder containing the videos used in this experiment
-checkDir(stimuliDir);
-parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep'); % path to write parameter file to
-checkDir(parmDir);
-videos = dir(strcat(stimuliDir,'\','*.mp4'));
-
-parmName_dec = videos(video_num).name(1:20);
-videoPath = fullfile(videos(video_num).folder,videos(video_num).name);
+% stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli'); % path to folder containing the videos used in this experiment
+% checkDir(stimuliDir);
+% parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep'); % path to write parameter file to
+% checkDir(parmDir);
+% videos = dir(strcat(stimuliDir,'\','*.mp4'));
+% 
+% parmName_dec = videos(video_num).name(1:20);
+% videoPath = fullfile(videos(video_num).folder,videos(video_num).name);
 
 bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
 
@@ -247,8 +252,8 @@ for loc=1:size(stim_configs,1)
 end
 param.StimulationConfigurations.Value{1, end-1}  = sprintf('%d', 1);                %cathode bool
 param.StimulationConfigurations.Value{2, end-1}  = sprintf('%d', 1);                % n pulses
-param.StimulationConfigurations.Value{3, end-1}  = sprintf('%d', CCEP_amplitude/2); % amp 1
-param.StimulationConfigurations.Value{4, end-1}  = sprintf('%d', CCEP_amplitude/2); % amp 2
+param.StimulationConfigurations.Value{3, end-1}  = sprintf('%d', CCEP_amplitude); % amp 1
+param.StimulationConfigurations.Value{4, end-1}  = sprintf('%d', CCEP_amplitude); % amp 2
 param.StimulationConfigurations.Value{5, end-1}  = sprintf('%d', 250);              %pw 1
 param.StimulationConfigurations.Value{6, end-1}  = sprintf('%d', 250);              %pw 2
 param.StimulationConfigurations.Value{7, end-1}  = sprintf('%d', 50);               %stim freq (does not matter for SPES)
@@ -258,8 +263,8 @@ param.StimulationConfigurations.Value{10,end-1}  = sprintf('%d', 0);            
 param.StimulationConfigurations.ColumnLabels{end+1,1} = sprintf('CCEP Cathode');
 param.StimulationConfigurations.Value{1, end}  = sprintf('%d', 0);                  %cathode bool
 param.StimulationConfigurations.Value{2, end}  = sprintf('%d', 1);                  % n pulses 
-param.StimulationConfigurations.Value{3, end}  = sprintf('%d', CCEP_amplitude/2);   % amp 1;
-param.StimulationConfigurations.Value{4, end}  = sprintf('%d', CCEP_amplitude/2);   % amp 2;
+param.StimulationConfigurations.Value{3, end}  = sprintf('%d', CCEP_amplitude);   % amp 1;
+param.StimulationConfigurations.Value{4, end}  = sprintf('%d', CCEP_amplitude);   % amp 2;
 param.StimulationConfigurations.Value{5, end}  = sprintf('%d', 250);                %pw 1;
 param.StimulationConfigurations.Value{6, end}  = sprintf('%d', 250);                %pw 2;
 param.StimulationConfigurations.Value{7, end}  = sprintf('%d', 50);                 %stim freq (does not matter for SPES) 
@@ -274,7 +279,7 @@ n_configs =size(stim_configs,1);
 
 %% Set up Stimuli
 n_jitters = n_configs * num_blocks;
-stimRowLabs = {'caption';'icon';'av';'EarlyOffsetExpression';'StimulusDuration'};
+stimRowLabs = {'caption';'icon';'audio';'EarlyOffsetExpression';'StimulusDuration'};
 param.Stimuli.Section      = 'Application';
 param.Stimuli.Type         = 'matrix';
 param.Stimuli.DefaultValue = '';
@@ -508,24 +513,24 @@ for loc=1:size(trial_seq,1)
         idx = idx +1;
     end
 
-    if vidResetTracker > vid_duration
-        numResets = numResets +1
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-        vidResetTracker = 0;
-        idx = idx +1;
-    end
+    % if vidResetTracker > vid_duration
+    %     numResets = numResets +1
+    %     param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+    %     vidResetTracker = 0;
+    %     idx = idx +1;
+    % end
 
     param.Sequence.Value{idx,1}  = sprintf('%d',trial_seq(loc,7)); % Stimulation
     vidResetTracker = vidResetTracker + stimuli_duration;
     experimentTime = experimentTime + stimuli_duration;
     idx = idx +1;
 
-    if vidResetTracker > vid_duration
-        numResets = numResets +1
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-        vidResetTracker = 0;
-        idx = idx +1;
-    end
+    % if vidResetTracker > vid_duration
+    %     numResets = numResets +1
+    %     param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+    %     vidResetTracker = 0;
+    %     idx = idx +1;
+    % end
 
     if allowCCEPs
         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % CCEP Pause
@@ -539,12 +544,12 @@ for loc=1:size(trial_seq,1)
         experimentTime = experimentTime + CCEP_duration;
     end
 
-    if vidResetTracker > vid_duration
-        numResets = numResets +1
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-        vidResetTracker = 0;
-        idx = idx +1;
-    end
+    % if vidResetTracker > vid_duration
+    %     numResets = numResets +1
+    %     param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+    %     vidResetTracker = 0;
+    %     idx = idx +1;
+    % end
 
     param.Sequence.Value{idx,1}  = sprintf('%d',jitter_idx(loc)); % jittered ISI
     jitterLocs = [jitterLocs; idx];
