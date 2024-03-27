@@ -72,7 +72,7 @@
 %   since the pseduorandomization uses recursive methods to ensure rules
 %   about amplitude and channels are not violated. 
                                     
-BCI2KPath = '/Users/nkb/Documents/BCI2000tools'; % Set the path of the BCI2000 main directory here
+BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools'; % Set the path of the BCI2000 main directory here
 % noah windows path 'C:\BCI2000\BCI2000'
 % noah mac path: '/Users/nkb/Documents/BCI2000tools'
 % utah path
@@ -100,22 +100,30 @@ video_num = 1; % video index, name and number below
 %  5:   y2mate.com - Great Inventions  60 Minutes Full Episodes_720p.mp4'                }
 
 conditions2remove = [];% add the numeric value as they appear on the testing image
-generateTest = 0; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
+generateTest = 1; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
 rmHighestChargeCondition = 0; % set to 1 if removing highest amplitude-pulsewidth pair
 allowCCEPs = 1; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
 CCEP_amplitude = 1000; % uA
 CCEP_ISI = 1; % sec, duration following a CCEP 
 % Pathing
-root = 'C:\Paradigms';
+% root = 'C:\Paradigms'; % windows path
 % stimuliDir = fullfile(root,'\tasks\BLAES\BLAES_param_sweep\stimuli'); % path to folder containing the videos used in this experiment
 % checkDir(stimuliDir);
 % parmDir  = fullfile(root,'\parms\BLAES\_BLAES_param_sweep'); % path to write parameter file to
 % checkDir(parmDir);
+
+% mac pathing adjust
+root = '/Users/nkb/Documents/Paradigms'; % mac path
+stimuliDir = fullfile(root,'/tasks/BLAES_param_sweep/stimuli'); % path to folder containing the videos used in this experiment
+checkDir(stimuliDir);
+parmDir  = fullfile(root,'/parms/BLAES/_BLAES_param_sweep'); % path to write parameter file to
+checkDir(parmDir);
 % videos = dir(strcat(stimuliDir,'\','*.mp4'));
 % 
 % parmName_dec = videos(video_num).name(1:20);
 % videoPath = fullfile(videos(video_num).folder,videos(video_num).name);
-
+parmName_dec = 'test';
+videoPath = 'test';
 bci2ktools(BCI2KPath) % sets up access to BCI2000 functions and .mex files, just change local dir above
 
 
@@ -133,9 +141,9 @@ test2 = cellfun(@num2str, fullKeyMap(1,:), 'UniformOutput', false);
 logicalIdx = ismember(test2,test);
 keyMap = fullKeyMap(:,logicalIdx);
 %% Video Information
-video = VideoReader(videoPath);
-vid_duration = video.Duration; % duration of the video in seconds
-clear video
+% video = VideoReader(videoPath);
+vid_duration = 3e3; % duration of the video in seconds
+% clear video
 %% Generate Potential Conditions
 % 
 % 
@@ -279,7 +287,7 @@ n_configs =size(stim_configs,1);
 
 %% Set up Stimuli
 n_jitters = n_configs * num_blocks;
-stimRowLabs = {'caption';'icon';'audio';'EarlyOffsetExpression';'StimulusDuration'};
+stimRowLabs = {'caption';'icon';'av';'EarlyOffsetExpression';'StimulusDuration'};
 param.Stimuli.Section      = 'Application';
 param.Stimuli.Type         = 'matrix';
 param.Stimuli.DefaultValue = '';
@@ -352,13 +360,13 @@ param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP Pause');
 
 %Reset Video
 loc = loc+1;
-vid_reset_duration = 0.2; % seconds
+vid_reset_duration = 0.5; % seconds
 vidReset_stimCode = loc;
 param.Stimuli.Value{1,loc}   = ''; 
 param.Stimuli.Value{2,loc}   = '';
 param.Stimuli.Value{3,loc}   = videoPath; %Reset Video
 param.Stimuli.Value{4,loc}   = '';
-param.Stimuli.Value{5,loc}   = sprintf('200ms');
+param.Stimuli.Value{5,loc}   = sprintf('500ms');
 param.Stimuli.ColumnLabels{loc,1} = sprintf('Video Reset');
 
 % end of run stimuli
@@ -738,7 +746,9 @@ if numel(conditions2remove) == 0 && generateTest
     testing_param.Sequence.LowRange      = '';
     testing_param.Sequence.HighRange     = '';
     testing_param.Sequence.Comment       = '';
-    testing_param.Sequence.Value         = {'1'}; % startup screen
+    A = ones(100,1);
+    B = arrayfun(@num2str, A, 'UniformOutput', 0); % make a cell array of 100 ones to ensure experiment does not timeout. 
+    testing_param.Sequence.Value         = B; % startup screen
     
     
     %% sequence type
