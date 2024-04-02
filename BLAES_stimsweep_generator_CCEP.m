@@ -59,6 +59,9 @@
 % make number of pulses able to be a user entry component, dynamically
 %   assign if not
 
+%% Notes
+% For best performance, use a sample block of 0.1 x sampling rate (100 ms)
+
 %% User Parameters
 
 % timing
@@ -305,13 +308,14 @@ param.Stimuli.Value{2,1}   = '';
 param.Stimuli.Value{3,1}   = '';
 param.Stimuli.Value{4,1}   = 'Keydown==32';
 param.Stimuli.Value{5,1}   = '40s';
-videoStart_duration = 1; % seconds
+
+videoStart_duration = 0.1; % seconds
 param.Stimuli.Value{1,2}   = ''; % stim code 2 = begin video
 param.Stimuli.Value{2,2}   = '';
 param.Stimuli.Value{3,2}   = videoPath;
 param.Stimuli.Value{4,2}   = '';
 param.Stimuli.Value{5,2}   = sprintf('%ds',videoStart_duration);
-
+videoStimCode = 2;
 param.Stimuli.ColumnLabels = cell(n_configs+n_jitters+8,1);
 param.Stimuli.ColumnLabels{1} = 'Start Screen';
 param.Stimuli.ColumnLabels{2} = 'Begin Video';
@@ -566,8 +570,9 @@ for loc=1:size(trial_seq,1)
     idx = idx+1;
 
     if vidResetTracker > vid_duration
+        experimentTime = experimentTime + videoStart_duration
         numResets = numResets +1
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        param.Sequence.Value{idx,1}  = sprintf('%d',videoStimCode) % restart video
         vidResetTracker = 0;
         idx = idx +1;
     end
