@@ -40,7 +40,9 @@ for i=1:size(stimTriggers,2)
     s = stimTriggers{1,i};
     regSpace = regexp(s,'\s*');
     regNum = regexp(s,'\d*');
-    
+    if length(regSpace) > 1
+        regSpace = regSpace(1);
+    end
     stimMap(i).TriggerType = s(1:regSpace-1);
     stimMap(i).Code = str2double(s(regNum:end));
     stimMap(i).StaticID = stimuliNames(stimMap(i).Code);
