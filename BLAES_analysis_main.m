@@ -3,9 +3,18 @@ BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
 bci2ktools(BCI2KPath);
 boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
 Subject = 'BJH050';
+subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
+subject_info = table2struct(subject_info(strcmp(subject_info.Subject, Subject),:));
+stim_info = struct();
+stim_info(1).pair = subject_info.Pair1;stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
+mainfigDir = fullfile(boxpath,Subject,"figures"); 
+if ~exist(mainfigDir,'dir')
+    [~,~]=mkdir(mainfigDir);
+end
 run = 1;
 brain=load(fullfile(boxpath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
 load(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
+load('colors.mat');
 dataPath = dir(sprintf("%s/%s/*.dat",boxpath,Subject));
 tic
 [signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name));
@@ -17,36 +26,81 @@ timeit = toc;
 fprintf("loading time elapsed %f s",timeit)
 
 %% Downsampling and Channel Idenficiation
-[states,signals,fs] = downsample_seeg(signals,states,fs,500);
+[states,signals,fs] = downsample_seeg(signals,states,fs,1000);
 channelLocs = find(~isnan(VERA_idx));
 signals = signals(:,channelLocs);
 signals = preprocess(signals);
 [epochLocs,intervals] =getAllIntervals(states.StimulusCode,stimMap);
 disp('done')
-%%
-timeOffset = 0.1;
+%% Epoching
+timeOffset = 0.5;
 tic;
 epochs = epochData(signals,brain.electrodeNames,intervals,states.CereStimStimulation,timeOffset,fs,stimMap);
 timeit = toc;
 fprintf("epoch time elapsed %f s \n",timeit)
 % exportRawData(fullfile(boxpath,Subject),seeg,states,params,intervals);
 
-%%
+%% Single Channel
+close all
 fig = figure(1);
-chan = 100;
+chan = 69;
 for i=1:length(epochs(chan).epoch)
     ax=subplot(4,6,i);
+    set(gca,'ButtonDownFcn',@fig_from_subplot)
+
     vals = epochs(chan).epoch(i).avg;
     std = epochs(chan).epoch(i).std;
-    t = linspace(-1,1,length(vals));
+    t = linspace(-epochs(chan).epoch(i).timeOffset,epochs(chan).epoch(i).timeOffset+(length(vals)/fs/2),length(vals));
     plot(ax,t,vals);
     hold on
     plotShading(ax,t,vals,std);
-    title(epochs(chan).epoch(i).code);
+    title(epochs(chan).epoch(i).label);
 end
 hold off
-sgtitle(epochs(chan).channel);
+sgtitle(epochs(chan).channel,'Interpreter','none');
+%% Each condition per trajectory
+close all
+dir = fullfile(mainfigDir,'trajs');
+if ~exist(dir,'dir')
+    mkdir(dir);
+end
+trajectories = unique({epochs.shank});
+traj_idx = {epochs.shank};
+for tr=1:length(trajectories)
+% for tr=1:1
 
+    locs = find(strcmp(traj_idx,trajectories{tr}));
+    fig=figure('Visible','off');
+    set(fig,"PaperSize",[8 11]);
+    fig.PaperPosition = [0 0 8 11];
+    set(gcf,'Position',[100 100 3000 2000])
+    tcl = tiledlayout(4,4);
+    for l=1:length(locs)
+        chan = epochs(locs(l)).channel;
+        data = epochs(locs(l)).epoch;
+        % ax = subplot(4,4,l);
+        ax=nexttile(tcl);
+        set(gca,'ButtonDownFcn',@fig_from_subplot)
+        hold on
+        for j=1:length(data)
+            y = data(j).avg + j;
+            std = data(j).std;
+            t = linspace(-data(j).timeOffset,data(j).timeOffset + length(y)/fs/2,length(y));
+            plot(ax,t,y,'LineWidth',2,'DisplayName',data(j).label,'Color',colors(j,:));
+            % ax = plotShading(ax,t,y,std);
+        end
+        hold off
+        tit = title(chan,'Interpreter','none');
+        fontsize(tit,24,'points')
+    end
+    hL = legend({data.label});
+    fontsize(hL,20,'points')
+    hL.Layout.Tile='East';
+    exportgraphics(fig,fullfile(dir,sprintf("%s traj.pdf",trajectories{tr})),"Append",false);
+    exportgraphics(fig,fullfile(dir,'trajs.pdf'),"Append",true);
+
+    % hL.Location='eastoutside';
+end
 
 
 
@@ -66,6 +120,7 @@ function X = epochData(signals,chan_lab,intervals,stimulation_state,timeoffset,f
 sampleOffset = timeoffset * fs;
 num_channels = size(signals,2);
 X = struct();
+stimCodes = [stimMap.Code];
 for k=1:num_channels
     x = struct();
     for i=1:length(intervals)
@@ -79,11 +134,22 @@ for k=1:num_channels
             state(j,:) = stimulation_state(onsets(j)-sampleOffset:offsets(j)+sampleOffset);
         end
         x(i).code = intervals(i).code;
+        label_loc = find(stimCodes == intervals(i).code);
+        label_loc = label_loc(1);
+        x(i).label = makeLabelFromCereConfig(stimMap(label_loc).Config,stimMap(label_loc).Electrode);
         x(i).timeOffset = timeoffset;
         x(i).signals = temp; % trials x samples
         x(i).stim_state = state;
         x(i).avg = mean(temp,1);
         x(i).std = std(temp,1);
+        vals = [stimMap(label_loc).Config.Config];
+        ma = str2num(vals{3})/1000;
+        pw = str2num(vals{5});
+        f = str2num(vals{7});
+        x(i).current = ma;
+        x(i).pw = pw;
+        x(i).freq=f;
+        x(i).loc = stimMap(label_loc).Electrode;
     end
     X(k).epoch = x;
     X(k).channel = chan_lab{k};
