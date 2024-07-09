@@ -66,7 +66,10 @@ if ~exist(dir,'dir')
 end
 trajectories = unique({epochs.shank});
 traj_idx = {epochs.shank};
+
 newLoop = 1;
+
+
 for tr=1:length(trajectories)
 % for tr=1:1
 
@@ -98,12 +101,14 @@ for tr=1:length(trajectories)
     fontsize(hL,20,'points')
     hL.Layout.Tile='East';
     exportgraphics(fig,fullfile(dir,sprintf("%s traj.pdf",trajectories{tr})),"Append",false);
+
     if newLoop
         exportgraphics(fig,fullfile(dir,'trajs.pdf'),"Append",false);
         newLoop = 0;
     else
         exportgraphics(fig,fullfile(dir,'trajs.pdf'),"Append",true);
     end
+
 
     % hL.Location='eastoutside';
 end
