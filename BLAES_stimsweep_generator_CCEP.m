@@ -59,8 +59,11 @@
 % make number of pulses able to be a user entry component, dynamically
 %   assign if not
 
+%% Notes
+% For best performance, use a sample block of 0.1 x sampling rate (100 ms)
+
 %% User Parameters
-addpath('functions');
+
 % timing
 %   1 Block takes (6s x number of configurations)
 %   This is preserved with and without CCEPs. CCEPs add an additional 2
@@ -306,13 +309,14 @@ param.Stimuli.Value{2,1}   = '';
 param.Stimuli.Value{3,1}   = '';
 param.Stimuli.Value{4,1}   = 'Keydown==32';
 param.Stimuli.Value{5,1}   = '40s';
-videoStart_duration = 1; % seconds
+
+videoStart_duration = 0.1; % seconds
 param.Stimuli.Value{1,2}   = ''; % stim code 2 = begin video
 param.Stimuli.Value{2,2}   = '';
 param.Stimuli.Value{3,2}   = videoPath;
 param.Stimuli.Value{4,2}   = '';
 param.Stimuli.Value{5,2}   = sprintf('%ds',videoStart_duration);
-
+videoStimCode = 2;
 param.Stimuli.ColumnLabels = cell(n_configs+n_jitters+8,1);
 param.Stimuli.ColumnLabels{1} = 'Start Screen';
 param.Stimuli.ColumnLabels{2} = 'Begin Video';
@@ -392,70 +396,6 @@ for idx=1:n_configs % stim codes 3:n_configs+2 are stim trials, 2 seconds long w
     param.Stimuli.ColumnLabels{loc,1} = sprintf('stim config %d',stimLabel(idx));
 end
 
-% % pause between blocks stimuli
-% loc = n_configs+3;
-% blockPause = 10; % seconds
-% blockPause_stimCode = loc;
-% param.Stimuli.Value{1,loc}   = ''; %Pause Between Blocks
-% param.Stimuli.Value{2,loc}   = '';
-% param.Stimuli.Value{3,loc}   = '';
-% param.Stimuli.Value{4,loc}   = '';
-% param.Stimuli.Value{5,loc}   = '10s';
-% param.Stimuli.ColumnLabels{loc,1} = sprintf('Block Pause');
-% 
-% % CCEP stimuli 1
-% CCEP_duration = .2; % seconds
-% loc = n_configs+4;
-% CCEP_stimcode_1 = loc;
-% param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
-% param.Stimuli.Value{2,loc}   = '';
-% param.Stimuli.Value{3,loc}   = '';
-% param.Stimuli.Value{4,loc}   = '';
-% param.Stimuli.Value{5,loc}   = '200ms';
-% param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
-% 
-% % CCEP stimuli 2
-% loc = n_configs+5;
-% CCEP_stimcode_2 = loc;
-% param.Stimuli.Value{1,loc}   = ''; %Trigger CCEP
-% param.Stimuli.Value{2,loc}   = '';
-% param.Stimuli.Value{3,loc}   = '';
-% param.Stimuli.Value{4,loc}   = '';
-% param.Stimuli.Value{5,loc}   = '200ms';
-% param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP');
-% 
-% % CCEP Pause
-% loc = n_configs+6;
-% CCEP_pause_stimCode = loc;
-% param.Stimuli.Value{1,loc}   = ''; %Pause after leading CCEP
-% param.Stimuli.Value{2,loc}   = '';
-% param.Stimuli.Value{3,loc}   = '';
-% param.Stimuli.Value{4,loc}   = '';
-% param.Stimuli.Value{5,loc}   = sprintf('%ds',CCEP_ISI);
-% param.Stimuli.ColumnLabels{loc,1} = sprintf('CCEP Pause');
-% 
-% %Reset Video
-% loc = n_configs+7;
-% vid_reset_duration = 0.2; % seconds
-% vidReset_stimCode = loc;
-% param.Stimuli.Value{1,loc}   = ''; 
-% param.Stimuli.Value{2,loc}   = '';
-% param.Stimuli.Value{3,loc}   = videoPath; %Reset Video
-% param.Stimuli.Value{4,loc}   = '';
-% param.Stimuli.Value{5,loc}   = sprintf('200ms');
-% param.Stimuli.ColumnLabels{loc,1} = sprintf('Video Reset');
-% 
-% 
-% % end of run stimuli
-% loc = n_configs+8;
-% endRun_stimcode = loc;
-% param.Stimuli.Value{1,loc}   = 'End of Run';
-% param.Stimuli.Value{2,loc}   = '';
-% param.Stimuli.Value{3,loc}   = '';
-% param.Stimuli.Value{4,loc}   = 'Keydown==32';
-% param.Stimuli.Value{5,loc}   = '40s';
-% param.Stimuli.ColumnLabels{loc} = sprintf('End Run');
-
 param.Stimuli.RowLabels    = stimRowLabs;
 
 jitter_idx = zeros(n_jitters,1);
@@ -479,119 +419,6 @@ end
 
 
 res = checkStructFields(param.Stimuli);
-% %% set up sequence;
-% param.Sequence.Section       = 'Application';
-% param.Sequence.Type          = 'intlist';
-% param.Sequence.DefaultValue  = '';
-% param.Sequence.LowRange      = '';
-% param.Sequence.HighRange     = '';
-% param.Sequence.Comment       = '';
-% param.Sequence.Value         = '';
-% param.Sequence.Value{1,1}    = '1'; % startup screen
-% param.Sequence.Value{2,1}    = '2'; % begin movie
-% idx = 3; % incrementer for trial sequence
-% jitterLocs = [];
-% experimentTime = videoStart_duration;
-% vidResetTracker = experimentTime;
-% numResets = 0;
-% for loc=1:size(trial_seq,1)
-%     % fprintf('%d exp time %d vid duration\n',experimentTime,vid_duration)
-% 
-%     if vidResetTracker > vid_duration
-%         numResets = numResets +1
-%         param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-%         vidResetTracker = 0;
-%         idx = idx +1;
-%     end
-% 
-% 
-%     channelPair = find(cathodeChannels== trial_seq(loc,5));
-%     if channelPair == 1
-%         CCEP_stimcode = CCEP_stimcode_1;
-%     elseif channelPair == 2
-%         CCEP_stimcode = CCEP_stimcode_2;
-%     end
-% 
-%     if allowCCEPs
-%         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % leading CCEP
-%         vidResetTracker = vidResetTracker + CCEP_duration;
-%         experimentTime = experimentTime + CCEP_duration;
-%         idx = idx +1;
-%         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % CCEP Pause
-%         vidResetTracker = vidResetTracker + CCEP_ISI;
-%         experimentTime = experimentTime + CCEP_ISI;
-%         idx = idx +1;
-%     end
-% 
-%     % if vidResetTracker > vid_duration
-%     %     numResets = numResets +1
-%     %     param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-%     %     vidResetTracker = 0;
-%     %     idx = idx +1;
-%     % end
-% 
-%     param.Sequence.Value{idx,1}  = sprintf('%d',trial_seq(loc,7)); % Stimulation
-%     vidResetTracker = vidResetTracker + stimuli_duration;
-%     experimentTime = experimentTime + stimuli_duration;
-%     idx = idx +1;
-% 
-%     % if vidResetTracker > vid_duration
-%     %     numResets = numResets +1
-%     %     param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-%     %     vidResetTracker = 0;
-%     %     idx = idx +1;
-%     % end
-% 
-%     if allowCCEPs
-%         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_pause_stimCode); % CCEP Pause
-%         idx = idx +1;
-%         vidResetTracker = vidResetTracker + CCEP_ISI;
-%         experimentTime = experimentTime + CCEP_ISI;
-% 
-%         param.Sequence.Value{idx,1}  = sprintf('%d',CCEP_stimcode); % lagging CCEP
-%         idx = idx +1;
-%         vidResetTracker = vidResetTracker + CCEP_duration;
-%         experimentTime = experimentTime + CCEP_duration;
-%     end
-% 
-%     % if vidResetTracker > vid_duration
-%     %     numResets = numResets +1
-%     %     param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-%     %     vidResetTracker = 0;
-%     %     idx = idx +1;
-%     % end
-% 
-%     param.Sequence.Value{idx,1}  = sprintf('%d',jitter_idx(loc)); % jittered ISI
-%     jitterLocs = [jitterLocs; idx];
-%     vidResetTracker = vidResetTracker + jitter_vals(loc);
-%     experimentTime = experimentTime + jitter_vals(loc);
-%     idx = idx+1;
-% 
-%     if vidResetTracker > vid_duration
-%         numResets = numResets +1
-%         param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-%         vidResetTracker = 0;
-%         idx = idx +1;
-%     end
-% 
-% 
-%     if mod(loc,n_configs)==0 && loc~=size(trial_seq,1) % block pauses
-%         param.Sequence.Value{idx,1}  = sprintf('%d',blockPause_stimCode);
-%         vidResetTracker = vidResetTracker + blockPause;
-%         experimentTime = experimentTime + blockPause;
-%         idx = idx +1;
-%     end
-% 
-%     if vidResetTracker > vid_duration
-%         numResets = numResets +1
-%         param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
-%         vidResetTracker = 0;
-%         idx = idx +1;
-%     end
-% 
-% end
-% param.Sequence.Value{end+1,1} = sprintf('%d',endRun_stimcode); % end
-% fprintf('%d exp time %d vid duration',experimentTime,vid_duration)
 
 %% sequence type
 param.SequenceType.Section       = 'Application';
@@ -740,8 +567,9 @@ for loc=1:size(trial_seq,1)
     idx = idx+1;
 
     if vidResetTracker > vid_duration
+        experimentTime = experimentTime + videoStart_duration
         numResets = numResets +1
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        param.Sequence.Value{idx,1}  = sprintf('%d',videoStimCode) % restart video
         vidResetTracker = 0;
         idx = idx +1;
     end
