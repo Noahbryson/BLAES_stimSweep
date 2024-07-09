@@ -60,7 +60,7 @@
 %   assign if not
 
 %% User Parameters
-
+addpath('functions');
 % timing
 %   1 Block takes (6s x number of configurations)
 %   This is preserved with and without CCEPs. CCEPs add an additional 2
@@ -763,15 +763,6 @@ if numel(conditions2remove) == 0 && generateTest
     
     %% set up Stim Triggers
     TriggerExp = 'Keydown';
-    
-    % new_map = cell(2,numConfigs);
-    % for i=1:(size(new_map,2)/2)
-    % new_map{1,2*i-1} = keyboardMap{1,i};
-    % new_map{2,2*i-1} = keyboardMap{2,i};
-    % new_map{1,2*i} = keyboardMap{1,i+size(new_map,2)/2};
-    % new_map{2,2*i} = keyboardMap{2,i+size(new_map,2)/2};
-    % end
-    % keyboardMap = new_map;
     testing_param.StimulationTriggers.Section = 'CereStim';
     testing_param.StimulationTriggers.Type = 'matrix';
     testing_param.StimulationTriggers.DefaultValue = '';
@@ -783,7 +774,6 @@ if numel(conditions2remove) == 0 && generateTest
     stimDescription_labels{end+1} = 'key';
     stimDescription_labels{end+1} = 'keypress_value';
     fig = figure(1);
-    % set(gcf, 'Position', get(0, 'Screensize')); %fullscreen fig generation
     set(gcf, 'Position', [1 1 2560 1080])
     sgtitle(sprintf('Load Configuration with Indicated Key\nPress ENTER to Deliver Stimulation'),'FontSize',18)
     chargeDensity = stimMat_cathode(:,3).*stimMat_cathode(:,4).*stimMat_cathode(:,2)*carrier_freq*stimuli_duration * 1e-6 / (electrodeSurfaceArea*0.01); % us * uA * numPulses * Hz * s/cm^2 = pC/cm^2 -> pC/cm^2 * 1e-6 = uC/cm^2
