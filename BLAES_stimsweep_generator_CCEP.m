@@ -75,8 +75,8 @@
 %   since the pseduorandomization uses recursive methods to ensure rules
 %   about amplitude and channels are not violated. 
                                     
-BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools'; % Set the path of the BCI2000 main directory here, need this to write params
-% noah windows path 'C:\BCI2000\BCI2000'
+BCI2KPath = 'C:\BCI2000.x64'; % Set the path of the BCI2000 main directory here, need this to write params
+addpath(genpath('C:\Users\Peter\Documents\MATLAB\BLAES_stimSweep'));% noah windows path 'C:\BCI2000\BCI2000'
 % noah mac path: '/Users/nkb/Documents/BCI2000tools'
 % utah path
 % bigcart path
