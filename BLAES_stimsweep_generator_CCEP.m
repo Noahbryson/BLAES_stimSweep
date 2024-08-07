@@ -567,9 +567,9 @@ for loc=1:size(trial_seq,1)
     idx = idx+1;
 
     if vidResetTracker > vid_duration
-        experimentTime = experimentTime + videoStart_duration
-        numResets = numResets +1
-        param.Sequence.Value{idx,1}  = sprintf('%d',videoStimCode) % restart video
+        experimentTime = experimentTime + videoStart_duration;
+        numResets = numResets +1;
+        param.Sequence.Value{idx,1}  = sprintf('%d',videoStimCode); % restart video
         vidResetTracker = 0;
         idx = idx +1;
     end
@@ -583,15 +583,15 @@ for loc=1:size(trial_seq,1)
     end
 
     if vidResetTracker > vid_duration
-        numResets = numResets +1
-        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode) % restart video
+        numResets = numResets +1;
+        param.Sequence.Value{idx,1}  = sprintf('%d',vidReset_stimCode); % restart video
         vidResetTracker = 0;
         idx = idx +1;
     end
     
 end
 param.Sequence.Value{end+1,1} = sprintf('%d',endRun_stimcode); % end
-fprintf('%d exp time %d vid duration',experimentTime,vid_duration)
+
 
 % Write Trial Sweep Parm
 fname = sprintf('BLAES_stimsweep_run_%s.prm',parmName_dec);
@@ -604,7 +604,8 @@ for loc=1:length(parameter_lines)
     fprintf( fid, '\r\n' );
 end
 fclose(fid);
-fprintf('\nwrote %s to %s\n', fname,parmDir);
+fprintf('\nwrote %s to %s', fname,parmDir);
+fprintf('\n%.1f exp time %.1f vid duration, %u loops\n',experimentTime,vid_duration,numResets)
 end
 %%
 %

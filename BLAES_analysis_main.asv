@@ -1,19 +1,26 @@
+addpath(genpath('/Users/nkb/Documents/NCAN/code/BLAES_stimSweep'))
 addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
 BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
 bci2ktools(BCI2KPath);
 boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
 Subject = 'BJH050';
-subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
-subject_info = table2struct(subject_info(strcmp(subject_info.Subject, Subject),:));
-stim_info = struct();
-stim_info(1).pair = subject_info.Pair1;stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
-mainfigDir = fullfile(boxpath,Subject,"figures"); 
+if exist(fullfile(boxpath,'Subject_Locations.xlsx'),'file')
+    subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
+    subject_info = table2struct(subject_info(strcmp(subject_info.Subject, Subject),:));
+    stim_info = struct();
+    stim_info(1).pair = subject_info.Pair1;stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
+    subject_info.Triggers = strsplit(subject_info.Triggers,',');
+    channelSort = 1;
+else
+    channelSort = 0;
+end
+mainfigDir = fullfile(boxpath,Subject,"figures");
 if ~exist(mainfigDir,'dir')
     [~,~]=mkdir(mainfigDir);
 end
 run = 1;
 brain=load(fullfile(boxpath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
-load(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
+
 load('colors.mat');
 dataPath = dir(sprintf("%s/%s/*.dat",boxpath,Subject));
 tic
@@ -24,79 +31,83 @@ fs = params.SamplingRate.NumericValue;
 stimMap = parse_stimsweep_stimcodes(params);
 timeit = toc;
 fprintf("loading time elapsed %f s",timeit)
-
-%% Downsampling and Channel Idenficiation
-[states,signals,fs] = downsample_seeg(signals,states,fs,1000);
-channelLocs = find(~isnan(VERA_idx));
-signals = signals(:,channelLocs);
-signals = preprocess(signals);
+preprocessFlag = 0;
+%% Preprocessing
+% Downsampling and Channel Idenficiation
+if ~preprocessFlag
+    [states,signals,fs] = downsample_seeg(signals,states,fs,1000);
+    if exist(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
+        load(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
+        channelLocs = find(~isnan(VERA_idx));
+        signals = signals(:,channelLocs);
+        dat_channelNames = params.ChannelNames.Value(channelLocs);
+    end
+    preprocessFlag = 1;
+end
+[signals, trigger] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers);
 [epochLocs,intervals] =getAllIntervals(states.StimulusCode,stimMap);
-disp('done')
-%% Epoching
+fprintf('\ndone\n')
+% Epoching
 timeOffset = 0.5;
-tic;
-epochs = epochData(signals,brain.electrodeNames,intervals,states.CereStimStimulation,timeOffset,fs,stimMap);
-timeit = toc;
-fprintf("epoch time elapsed %f s \n",timeit)
-% exportRawData(fullfile(boxpath,Subject),seeg,states,params,intervals);
+pulseLocs= triggerEpochs(trigger,stimMap,timeOffset,intervals,fs,8,1);
+theta_epochs = theta_burst_epoch(signals,brain.electrodeNames,intervals,states.CereStimStimulation,timeOffset,fs,stimMap,pulseLocs);
+configs  = {'current' 'pw' 'freq' 'loc'};
+conditions = struct();
+%% sort by stimulation channel
+stimchannel_epochs = parseCondition(theta_epochs,'loc');
+%% Base Frequency
+local_dat = stimchannel_epochs(1).entry([stimchannel_epochs(1).entry.current]==1);
+trajplot(local_dat,0,dir,fs,colors)
 
+
+
+%% Charge Density
 %% Single Channel
-close all
+% close all
 fig = figure(1);
-chan = 69;
-for i=1:length(epochs(chan).epoch)
-    ax=subplot(4,6,i);
+chan = 126;
+channel_name = brain.electrodeNames{chan};
+local_data = theta_epochs(strcmp({theta_epochs.channel},channel_name));
+tcl = tiledlayout(4,6);
+
+for i=1:length(local_data)
+    ax=nexttile(tcl);
     set(gca,'ButtonDownFcn',@fig_from_subplot)
 
-    vals = epochs(chan).epoch(i).avg;
-    std = epochs(chan).epoch(i).std;
-    t = linspace(-epochs(chan).epoch(i).timeOffset,epochs(chan).epoch(i).timeOffset+(length(vals)/fs/2),length(vals));
-    plot(ax,t,vals);
+    vals = local_data(i).avg;
+    stdev = local_data(i).std;
+    t = linspace(-local_data(i).timeOffset,local_data(i).timeOffset+(length(vals)/fs/2),length(vals));
     hold on
-    plotShading(ax,t,vals,std);
-    title(epochs(chan).epoch(i).label);
+    plot(ax,t,vals,'Color',[1 0 0]);
+    plot(ax,t,local_data(i).signals','Color',[0,0,0 0.001])
+    ylim(ax,[-1.01*max(abs(local_data(i).signals(:))), 1.01*max(abs(local_data(i).signals(:)))]);
+    plotShading(ax,t,vals,stdev);
+    title(local_data(i).label);
 end
+
 hold off
-sgtitle(epochs(chan).channel,'Interpreter','none');
+linkaxes(tcl.Children,'x');
+sgtitle(theta_epochs(chan).channel,'Interpreter','none');
+clear local_data
 %% Each condition per trajectory
 close all
-dir = fullfile(m)
-trajectories = unique({epochs.shank});
-traj_idx = {epochs.shank};
-% for tr=1:length(trajectories)
-for tr=1:1
-
-    locs = find(strcmp(traj_idx,trajectories{tr}));
-    figure(tr)
-    set(gcf,"PaperSize",[8 11]);
-    tcl = tiledlayout(4,4);
-    for l=1:length(locs)
-        chan = epochs(locs(l)).channel;
-        data = epochs(locs(l)).epoch;
-        % ax = subplot(4,4,l);
-        ax=nexttile(tcl);
-        set(gca,'ButtonDownFcn',@fig_from_subplot)
-        hold on
-        for j=1:length(data)
-            y = data(j).avg + j;
-            std = data(j).std;
-            t = linspace(-data(j).timeOffset,data(j).timeOffset + length(y)/fs/2,length(y));
-            plot(ax,t,y,'LineWidth',2,'DisplayName',data(j).label,'Color',colors(j,:));
-            % ax = plotShading(ax,t,y,std);
-        end
-        hold off
-        tit = title(chan,'Interpreter','none');
-        fontsize(tit,24,'points')
-    end
-    hL = legend({data.label});
-    fontsize(hL,20,'points')
-    hL.Layout.Tile='East';
-    % hL.Location='eastoutside';
-end
-
-
+saveFigs = 0;
+dir = fullfile(mainfigDir,'trajs');
+trajplot(stimchannel_epochs(2).entry,0,dir,fs,colors);
 
 %%
+
+function result = parseCondition(epoch_struct,condition_fieldname)
+conditions = unique([epoch_struct.(condition_fieldname)]);
+result = struct();
+for i=1:length(conditions)
+    locs = [epoch_struct.(condition_fieldname)]==conditions(i);
+    result(i).type = condition_fieldname;
+    result(i).val = conditions(i);
+    result(i).entry = epoch_struct(locs);
+end
+
+end
 function exportRawData(fpath,seeg,states,params,intervals)
 seegdat=seeg.data;
 channels = seeg.name;
@@ -107,54 +118,146 @@ save(fullfile(fpath,'params.mat'),"params", "-mat",'-v7');
 save(fullfile(fpath,'intervals.mat'),"intervals", "-mat",'-v7');
 
 end
+function trig=triggerEpochs(trigger,stimMap,timeoffset,intervals,fs,base_frequency,stimDuration)
+sampleOffset = timeoffset * fs;
+trig = struct();
+stimCodes = [stimMap.Code];
+for i=1:length(intervals)
+    
+    onsets = intervals(i).start;
+    offsets = intervals(i).stop;
+    len = mean(offsets -onsets) + sampleOffset;
+    temp = zeros(length(onsets),len+1);
+    
+    
+    trig(i).code = intervals(i).code;
+    label_loc = find(stimCodes == intervals(i).code);
+    label_loc = label_loc(1);
+    vals = [stimMap(label_loc).Config.Config];
+    trig(i).current = str2double(vals{3})/1000;
+    trig(i).pw = str2double(vals{5});
+    trig(i).f = str2double(vals{7});
+    trig(i).n_pulse = str2double(vals{2});
+    peak_dist = (fs / trig(i).f)*0.8;
+    num_peaks = base_frequency*stimDuration*trig(i).n_pulse;
+    peaks = struct();
+    for j=1:length(onsets)
+        % TODO: add manual adjustment when number of peaks is off.
+        % calculate number of peaks from train duration, frequency and num
+        % pulses. 
+        d = trigger(onsets(j):offsets(j)+sampleOffset);
+        temp(j,:) = d;
+        thresh = 2*std(abs(d));
+        [pk,pkLoc] = findpeaks(abs(d(100:end)),'MinPeakHeight',thresh,'MinPeakDistance',peak_dist);
+        pkLoc = pkLoc+100;
+        annotate = 0;
+        if length(pk) < num_peaks && annotate
+            n = num_peaks - length(pk);
+            fig=figure;
+            hold on
+            plot(abs(d),'LineWidth',2.2)
+            yline(thresh)
+            scatter(pkLoc,pk);
+            title(sprintf('code %d iter %d\nadd %d points',i,j,n))
+            hold off
+            set(gcf,'Position',[800 600 2000 900])
+            [pkLoc_n,pk_n] = ginput(n);
+            close(fig)
+            pkLoc = [pkLoc; pkLoc_n];
+            pk = [pk; pk_n];
+            peaks(j).n = pkLoc;
 
-function X = epochData(signals,chan_lab,intervals,stimulation_state,timeoffset,fs,stimMap)
+        elseif length(pk) > num_peaks
+            n = length(pk)-num_peaks;
+            fig=figure;
+            hold on
+            plot(abs(d),'LineWidth',2.2)
+            yline(thresh)
+            scatter(pkLoc,pk);
+            title(sprintf('code %d iter %d\nremove %d points',i,j,n))
+            hold off
+            set(gcf,'Position',[800 600 2000 900])
+            [pkLoc_n,pk_n] = ginput(n);
+            pkLoc_n = pkLoc(knnsearch(pkLoc(:),pkLoc_n(:)));
+            rm_loc = ismember(pkLoc, pkLoc_n);
+            pkLoc = pkLoc(~rm_loc);
+            pk = pk(~rm_loc);
+            peaks(j).n = pkLoc;
+            close(fig)
+        else
+            peaks(j).n = pkLoc;
+        end
+    end
+    trig(i).signal = temp;
+    trig(i).peaks = peaks;
+end
+end
+function x = theta_burst_epoch(signals,chan_lab,intervals,stimulation_state,timeoffset,fs,stimMap,triggerEpochs)
 sampleOffset = timeoffset * fs;
 num_channels = size(signals,2);
-X = struct();
+x = struct();
 stimCodes = [stimMap.Code];
+idx = 1;
+triggerCodes = [triggerEpochs.code];
+
 for k=1:num_channels
-    x = struct();
+    % x = struct();
     for i=1:length(intervals)
         onsets = intervals(i).start;
         offsets = intervals(i).stop;
-        len = mean(offsets -onsets) + sampleOffset*2;
+        len = mean(offsets -onsets) + sampleOffset;
         temp = zeros(length(onsets),len+1);
         state = zeros(length(onsets),len+1);
+        x(idx).code = intervals(i).code;
+        stimloc = triggerEpochs(ismember(triggerCodes,intervals(i).code));
         for j=1:length(onsets)
-            temp(j,:) = signals(onsets(j)-sampleOffset:offsets(j)+sampleOffset,k);
-            state(j,:) = stimulation_state(onsets(j)-sampleOffset:offsets(j)+sampleOffset);
+            peakset = stimloc.peaks(j).n;
+            d = signals(onsets(j):offsets(j)+sampleOffset,k);
+            d = getHighPassData(d,0.5,2,fs);
+            d = interpolateSpikes(d,peakset,stimloc.signal(j,:));
+            temp(j,:) = d;
+            state(j,:) = stimulation_state(onsets(j):offsets(j)+sampleOffset);
         end
-        x(i).code = intervals(i).code;
         label_loc = find(stimCodes == intervals(i).code);
         label_loc = label_loc(1);
-        x(i).label = makeLabelFromCereConfig(stimMap(label_loc).Config,stimMap(label_loc).Electrode);
-        x(i).timeOffset = timeoffset;
-        x(i).signals = temp; % trials x samples
-        x(i).stim_state = state;
-        x(i).avg = mean(temp,1);
-        x(i).std = std(temp,1);
+        x(idx).label = makeLabelFromCereConfig(stimMap(label_loc).Config,stimMap(label_loc).Electrode);
+        x(idx).timeOffset = timeoffset;
+        x(idx).signals = temp; % trials x samples
+        x(idx).stim_state = state;
+        x(idx).avg = mean(temp,1);
+        x(idx).std = std(temp,1);
         vals = [stimMap(label_loc).Config.Config];
-        ma = str2num(vals{3})/1000;
-        pw = str2num(vals{5});
-        f = str2num(vals{7});
-        x(i).current = ma;
-        x(i).pw = pw;
-        x(i).freq=f;
-        x(i).loc = stimMap(label_loc).Electrode;
-    end
-    X(k).epoch = x;
-    X(k).channel = chan_lab{k};
-    if ~isempty(strfind(chan_lab{k},"'"))
+        ma = str2double(vals{3})/1000;
+        pw = str2double(vals{5});
+        f = str2double(vals{7});
+        n_pulse = str2double(vals{2});
+        x(idx).current = ma;
+        x(idx).pw = pw;
+        x(idx).freq=f;
+        x(idx).loc = stimMap(label_loc).Electrode;
+        x(idx).channel = chan_lab{k};
+        electrodeSA = 5*0.01; % cm^2
+        stimDur = 1; %s
+        x(idx).charge = pw*ma*1000*n_pulse*f*stimDur/electrodeSA *1e-6;
+        x(idx).chargePerPhase = pw*ma*1000/electrodeSA *1e-6;
+        x(idx).chargeUnits = "uC/cm^2";
+        % charge = us * uA * numPulses * Hz * s/cm^2 = pC/cm^2 -> pC/cm^2 * 1e-6 = uC/cm^2
+        % charge/phase = us * uA/cm^2= pC/cm^2-> pC/cm^2 *1e-6 = uC/cm^2
+        if ~isempty(strfind(chan_lab{k},"'"))
         traj = sprintf('%s_L',chan_lab{k}(1));
-    else
-        traj = sprintf('%s_R',chan_lab{k}(1));
+        else
+            traj = sprintf('%s_R',chan_lab{k}(1));
+        end
+        x(idx).shank = traj;
+        bin_length = 200; % ms
+        [snr,~]= getSNR(temp,8,fs);
+        x(idx).snr = snr;
+        x(idx).snr_av = mean(snr);
+        x(idx).windowlen = sprintf("%.0f ms",bin_length);
+        idx = idx+1;
     end
-
-    X(k).shank = traj;
-
+    % x(k).epoch = x;
 end
-
 end
 
 function [epochLocs,intervals] = getAllIntervals(stimcode,stimMap)
@@ -181,7 +284,6 @@ mask(rm_rows) = false;
 epochLocs = epochLocs(mask);
 intervals = intervals(mask);
 end
-
 function intervals = getInterval(stimCode,value)
 A = find(stimCode==value);
 differences = diff(A);
@@ -201,23 +303,42 @@ else
     intervals = [];
 end
 end
-
-
-
-function signals = preprocess(signals,fs)
-% [b,a] = butter(2,0.5/(fs/2),"high");
+function [signals,trigger2] = preprocess(signals, fs,electrodeNames, triggerElectrodes)
+[b,a] = butter(2,85/(fs/2),"high");
 % filtDat = filtfilt(b,a,signals);
-common = getCommonAverage(signals);
+triggerLocs = ismember(electrodeNames,triggerElectrodes);
+test_locs = ~cellfun(@isempty,strfind(electrodeNames,'AR'));
+
+% close all
+% figure
+% subplot(2,1,1)
+% plot(abs(trigger))
+% hold on
+% yline(0.5*std(abs(trigger)),'LineWidth',3,'Color','r')
+% hold off
+
+% subplot(2,1,2)
+% plot(abs(trigger2))
+% hold on
+% yline(0.5*std(abs(trigger2)),'LineWidth',3,'Color','r')
+% hold off
+[b1,a1] = butter(6,65/(fs/2),"high");
+
+
+common = getCommonAverage(signals(:,~triggerLocs));
 common_agg = repmat(common,1,size(signals,2));
 clear common
 signals = signals - common_agg;
+trigger = mean(signals(:,triggerLocs),2);
+trigger = filtfilt(b,a,trigger);
+trigger3 = filtfilt(b,a,signals(:,triggerLocs));
+
+trigger2 = mean(signals(:,test_locs),2);
+trigger2 = filtfilt(b,a,trigger2);
 end
-
-
 function x  = getCommonAverage(signals)
 x = mean(signals,2);
 end
-
 function [states,signals,fs_out]=downsample_seeg(signals,states,fs,newfs)
 ratio = round(fs/newfs,0);
 fs_out = fs/ratio;
