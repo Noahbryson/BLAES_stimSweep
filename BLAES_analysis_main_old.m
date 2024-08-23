@@ -3,7 +3,7 @@ addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
 BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
 bci2ktools(BCI2KPath);
 boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
-Subject = 'BJH050';
+Subject = 'BJH052';
 if exist(fullfile(boxpath,'Subject_Locations.xlsx'),'file')
     subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
     subject_info = table2struct(subject_info(strcmp(subject_info.Subject, Subject),:));
@@ -35,7 +35,7 @@ preprocessFlag = 0;
 %% Preprocessing
 % Downsampling and Channel Idenficiation
 if ~preprocessFlag
-    [states,signals,fs] = downsample_seeg(signals,states,fs,500);
+    [states,signals,fs] = downsample_seeg(signals,states,fs,400);
     if exist(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
         load(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
         channelLocs = find(~isnan(VERA_idx));
@@ -44,51 +44,22 @@ if ~preprocessFlag
     end
     preprocessFlag = 1;
 end
-timing_adjust = 80; % ms, due to software triggered stimulation state.
-[signals, trigger,thresh] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers);
+[signals, trigger] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers);
 [epochLocs,intervals] =getAllIntervals(states.StimulusCode,stimMap);
 fprintf('\ndone\n')
 % Epoching
+timeOffset = 1;
+pulseLocs= triggerEpochs(trigger,stimMap,timeOffset,intervals,fs,8,1);
+theta_epochs = theta_burst_epoch(signals,brain.electrodeNames,intervals,states.CereStimStimulation,timeOffset,fs,stimMap,pulseLocs);
+configs  = {'current' 'pw' 'freq' 'loc'};
+conditions = struct();
 
-pulseLocs= triggerEpochs(trigger,stimMap,timing_adjust,intervals,fs,8,1,thresh);
-theta_epochs = theta_burst_epoch(signals,brain.electrodeNames,intervals,states.CereStimStimulation,timing_adjust,fs,stimMap,pulseLocs);
+%% Compute PSDs
 
 
-theta_band = [4 10]; % Hz
-smoothing_window = 0.1; % in seconds
-filterOrder = computeStableFilter(theta_band,'bandpass',fs);
-postStimStart = floor(2*fs);
-parfor i=1:length(theta_epochs)
-    [theta_epochs(i).theta_power,theta_epochs(i).theta_phase, theta_epochs(i).theta_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,theta_band,filterOrder, ...
-        'smooth',smoothing_window,'baselineDuration',1);
-    theta_epochs(i).theta_power = zscore(theta_epochs(i).theta_power);
-    theta_epochs(i).theta_power = avg_baseline_correct(theta_epochs(i).theta_power,1,fs);
-    theta_epochs(i).baseline_corr = channelCoherence(theta_epochs(i).baseline);
-    theta_epochs(i).stim_corr = channelCoherence(theta_epochs(i).signals);
-    theta_epochs(i).post_corr = channelCoherence(theta_epochs(i).pre_stim_post(:,postStimStart:end));
-end
-% configs  = {'current' 'pw' 'freq' 'loc'};
+
+%% sort by stimulation channel
 stimchannel_epochs = parseCondition(theta_epochs,'loc');
-%% coherenence stats
-export_labs = {'code' 'label' 'current' 'pw' 'freq' 'loc' 'channel' 'charge' 'chargePerPhase' 'chargeUnits' 'shank' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr'};
-
-outstruct = struct();
-N = length(theta_epochs);
-parfor i=1:N
-    for j=1:length(export_labs)
-        field = export_labs{j};
-        outstruct(i).(field) = theta_epochs(i).(field);
-    end
-    % stim vs baseline
-    [d,p] = compare_distributions(theta_epochs(i).stim_corr,theta_epochs(i).baseline_corr);
-    outstruct(i).stim_d = d;
-    outstruct(i).stim_p = p;
-    % post vs baseline
-    [d,p] = compare_distributions(theta_epochs(i).post_corr,theta_epochs(i).baseline_corr);
-    outstruct(i).post_d = d;
-    outstruct(i).post_p = p;
-
-end
 %% Fix Current Base Frequency
 local_dat = stimchannel_epochs(1).entry([stimchannel_epochs(1).entry.current]==1);
 analysis_name = "1 mA";
@@ -99,7 +70,7 @@ trajplot(local_dat,0,mainfigDir,fs,colors,analysis_name)
 %% Single Channel
 % close all
 fig = figure(1);
-chan = 100;
+chan = 30;
 channel_name = brain.electrodeNames{chan};
 local_data = theta_epochs(strcmp({theta_epochs.channel},channel_name));
 tcl = tiledlayout(4,6);
@@ -110,12 +81,11 @@ for i=1:length(local_data)
 
     vals = local_data(i).avg;
     stdev = local_data(i).std;
-    t = linspace(0,(length(vals)/fs),length(vals));
+    t = linspace(0,local_data(i).timeOffset+(length(vals)/fs),length(vals));
     hold on
-    % plot(ax,t,vals,'Color',[1 0 0],'LineWidth',2);
-    plot(ax,t,local_data(i).raw_sig','Color',[1,1,1 0.1])
-    % val = max(abs(local_data(i).signals(:)));
-    ylim(ax,[-1.01*val, 1.01*val]);
+    plot(ax,t,vals,'Color',[1 0 0]);
+    plot(ax,t,local_data(i).signals','Color',[0,0,0 0.001])
+    ylim(ax,[-1.01*max(abs(local_data(i).signals(:))), 1.01*max(abs(local_data(i).signals(:)))]);
     plotShading(ax,t,vals,stdev);
     title(local_data(i).label);
 end
@@ -129,15 +99,6 @@ saveFigs = 0;
 dir = fullfile(mainfigDir,'trajs');
 trajplot(stimchannel_epochs(2).entry,0,dir,fs,colors);
 
-
-
-%% Export Data for Method Testing
-channels = [22 100 54 5 131];
-exp_idx = ismember([theta_epochs.channel_idx],channels);
-exportStruct = theta_epochs(exp_idx);
-exportPath = '/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param/method_building';
-save(fullfile(exportPath,'selected_data.mat'),"exportStruct");
-save(fullfile(exportPath,'fs.mat'),'fs');
 %%
 
 function result = parseCondition(epoch_struct,condition_fieldname)
@@ -161,20 +122,15 @@ save(fullfile(fpath,'params.mat'),"params", "-mat",'-v7');
 save(fullfile(fpath,'intervals.mat'),"intervals", "-mat",'-v7');
 
 end
-function trig=triggerEpochs(trigger,stimMap,timing_adjust,intervals,fs,base_frequency,stimDuration,thresh)
-close all
-timing_adjust_samps = floor((timing_adjust / 1000) * fs);
+function trig=triggerEpochs(trigger,stimMap,timeoffset,intervals,fs,base_frequency,stimDuration)
+sampleOffset = timeoffset * fs;
 trig = struct();
 stimCodes = [stimMap.Code];
-% figure
-% rows = 6;
-% cols = ceil(length(intervals) / rows);
-% tcl = tiledlayout(rows,cols);
 for i=1:length(intervals)
-    % ax = nexttile(tcl);
-    onsets = intervals(i).start+timing_adjust_samps;
-    offsets = intervals(i).stop+timing_adjust_samps;
-    len = mean(offsets -onsets);
+    
+    onsets = intervals(i).start;
+    offsets = intervals(i).stop;
+    len = mean(offsets -onsets) + sampleOffset;
     temp = zeros(length(onsets),len+1);
     
     
@@ -188,46 +144,16 @@ for i=1:length(intervals)
     trig(i).n_pulse = str2double(vals{2});
     peak_dist = floor(fs/trig(i).f) -1;
     num_peaks = base_frequency*stimDuration*trig(i).n_pulse;
-    % % wrote this to not repeat the loop, but preallocated loops are much
-    % % faster than arrayfun
-    segments = arrayfun(@(s, e) trigger(s:e), onsets, offsets, 'UniformOutput', false);
-    segmentMatrix = vertcat(segments{:});
-    segmentMatrix = reshape(segmentMatrix, [],length(segments));
-    onsetPeaks = zeros(length(onsets),1);
-    for j=1:length(onsets) % find the median first peak of the signal to index
-        % TODO: add manual adjustment when number of peaks is off.
-        % calculate number of peaks from train duration, frequency and num
-        % pulses. 
-        d = trigger(onsets(j):offsets(j));
-        thresh = 0.5 * std(d);
-        [pk,onsetPeaks(j)] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'NPeaks',1,'MinPeakHeight',thresh);     
-    end
-    onsetPeak = mode(onsetPeaks);
-
     peaks = struct();
     for j=1:length(onsets)
         % TODO: add manual adjustment when number of peaks is off.
         % calculate number of peaks from train duration, frequency and num
         % pulses. 
-        d = trigger(onsets(j):offsets(j));
+        d = trigger(onsets(j):offsets(j)+sampleOffset);
         temp(j,:) = d;
-        % thresh = 0.5*std(abs(d));
-        % [pk,pkLoc] = findpeaks(abs(d),'MinPeakHeight',thresh,'MinPeakDistance',peak_dist,'NPeaks',num_peaks);
-        % [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist);
-        % [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist);
-        % [pk,tloc] = maxk(pk,num_peaks);
-        % pkLoc = pkLoc(tloc);
-        
-        pkLoc = stim_prediction(d,fs,trig(i).f,base_frequency,num_peaks, stimDuration,onsetPeak);
-
-        % figure
-        % plot(abs(d))
-        % hold on
-        % yline(thresh)
-        % xline(linspace(1,8,8)*fs/8,'Color',[0 1 0])
-        % scatter(pkLoc,pk);
-        % hold off
-        % pkLoc = pkLoc;
+        thresh = 1.5*std(abs(d));
+        [pk,pkLoc] = findpeaks(abs(d(100:end)),'MinPeakHeight',thresh,'MinPeakDistance',peak_dist);
+        pkLoc = pkLoc+100;
         annotate = 0;
         if length(pk) < num_peaks && annotate
             n = num_peaks - length(pk);
@@ -263,16 +189,15 @@ for i=1:length(intervals)
             peaks(j).n = pkLoc;
             close(fig)
         else
-            peaks(j).n = find(pkLoc ==1);
-            peaks(j).stim_array = pkLoc;
+            peaks(j).n = pkLoc;
         end
     end
     trig(i).signal = temp;
     trig(i).peaks = peaks;
 end
 end
-function x = theta_burst_epoch(signals,chan_lab,intervals,stimulation_state,timing_adjust,fs,stimMap,triggerEpochs)
-timing_adjust_samps = floor((timing_adjust / 1000) * fs);
+function x = theta_burst_epoch(signals,chan_lab,intervals,stimulation_state,timeoffset,fs,stimMap,triggerEpochs)
+sampleOffset = timeoffset * fs;
 num_channels = size(signals,2);
 x = struct();
 stimCodes = [stimMap.Code];
@@ -282,10 +207,9 @@ frequencies = linspace(1,250,250);
 for chan=1:num_channels
     % x = struct();
     for interval_idx=1:length(intervals)
-        onsets = intervals(interval_idx).start+timing_adjust_samps;
-        offsets = intervals(interval_idx).stop+timing_adjust_samps;
-        len = mean(offsets -onsets);
-        all_holder = zeros(length(onsets),3*len+1);
+        onsets = intervals(interval_idx).start;
+        offsets = intervals(interval_idx).stop;
+        len = mean(offsets -onsets) + sampleOffset;
         baseline_holder = zeros(length(onsets),len+1);
         signal_holder = zeros(length(onsets),len+1);
         raw_sig_holder = zeros(length(onsets),len+1);
@@ -294,15 +218,12 @@ for chan=1:num_channels
         stimloc = triggerEpochs(ismember(triggerCodes,intervals(interval_idx).code));
         for trial_num=1:length(onsets)
             peakset = stimloc.peaks(trial_num).n;
-            slice = signals(-len+onsets(trial_num):offsets(trial_num)+len,chan);
-            slice_hp = getHighPassData(slice,2,4,fs);
-            all_holder(trial_num,:) = slice_hp;
-            d = signals(onsets(trial_num):offsets(trial_num),chan);
+            d = signals(onsets(trial_num):offsets(trial_num)+sampleOffset,chan);
             baseline_window = [onsets(trial_num)-1-len,onsets(trial_num)-1];
-            d = getHighPassData(d,2,4,fs);
+            d = getHighPassData(d,0.5,2,fs);
             b = signals(baseline_window(1):baseline_window(2),chan);
-            baseline = getHighPassData(b,2,4,fs);
-            e = interpolateSpikes(d,peakset,stimloc.peaks(trial_num).stim_array,fs,10);
+            baseline = getHighPassData(b,0.5,2,fs);
+            e = interpolateSpikes(d,peakset,stimloc.signal(trial_num,:),fs,10);
             % figure(1)
             % plot(d,'LineWidth',4)
             % hold on
@@ -311,16 +232,15 @@ for chan=1:num_channels
             raw_sig_holder(trial_num,:) = d;
             signal_holder(trial_num,:) = e;
             baseline_holder(trial_num,:) = baseline;
-            % state(trial_num,:) = stimulation_state(onsets(trial_num):offsets(trial_num));
+            % state(trial_num,:) = stimulation_state(onsets(trial_num):offsets(trial_num)+sampleOffset);
         end
         label_loc = find(stimCodes == intervals(interval_idx).code);
         label_loc = label_loc(1);
         x(idx).label = makeLabelFromCereConfig(stimMap(label_loc).Config,stimMap(label_loc).Electrode);
-        x(idx).timing_adjust = timing_adjust;
+        x(idx).timeOffset = timeoffset;
         x(idx).signals = signal_holder; % trials x samples
         x(idx).raw_sig = raw_sig_holder;
         x(idx).baseline = baseline_holder;
-        x(idx).pre_stim_post = all_holder;
         % x(idx).stim_state = state;
         x(idx).avg = mean(signal_holder,1);
         x(idx).std = std(signal_holder,1);
@@ -360,7 +280,6 @@ for chan=1:num_channels
         x(idx).snr_av = snr;
         % x(idx).snr_av = mean(snr);
         x(idx).channel_idx = chan;
-        x(idx).stimloc = stimloc;
         idx = idx+1;
     end
     % x(k).epoch = x;
@@ -410,33 +329,38 @@ else
     intervals = [];
 end
 end
-function [signals,triggerOut,thresh] = preprocess(signals, fs,electrodeNames, triggerElectrodes)
+function [signals,trigger] = preprocess(signals, fs,electrodeNames, triggerElectrodes)
 [b,a] = butter(6,75/(fs/2),"high");
 % filtDat = filtfilt(b,a,signals);
 triggerLocs = ismember(electrodeNames,triggerElectrodes);
 test_locs = ~cellfun(@isempty,strfind(electrodeNames,'AR'));
-common = getCommonAverage(signals(:,~triggerLocs));
-common_agg = repmat(common,1,size(signals,2));
-signals = signals - common_agg;
-clear common_agg
-trigger = abs(filtfilt(b,a,common));
 
-trigger2 = mean(signals(:,triggerLocs),2); % this one seemingly works best, however will break down in bilateral stimulation. 
-triggerOut = filtfilt(b,a,trigger2);
-thresh = 0.5*std(triggerOut);
-close all
+% close all
 % figure
 % subplot(2,1,1)
-% plot(abs(triggerOut))
+% plot(abs(trigger))
 % hold on
 % yline(0.5*std(abs(trigger)),'LineWidth',3,'Color','r')
 % hold off
-% 
+
 % subplot(2,1,2)
 % plot(abs(trigger2))
 % hold on
 % yline(0.5*std(abs(trigger2)),'LineWidth',3,'Color','r')
 % hold off
+% [b1,a1] = butter(6,75/(fs/2),"high");
+
+
+common = getCommonAverage(signals(:,~triggerLocs));
+common_agg = repmat(common,1,size(signals,2));
+signals = signals - common_agg;
+clear common_agg
+% trigger = mean(signals(:,triggerLocs),2);
+trigger = abs(filtfilt(b,a,common));
+% trigger3 = filtfilt(b,a,signals(:,triggerLocs));
+
+trigger2 = mean(signals(:,test_locs),2); % this one seemingly works best, however will break down in bilateral stimulation. 
+trigger = filtfilt(b,a,trigger2);
 end
 function x  = getCommonAverage(signals)
 x = mean(signals,2);
