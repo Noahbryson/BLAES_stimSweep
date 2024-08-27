@@ -31,7 +31,7 @@ for i=1:length(theta_epochs)
     theta_epochs(i).post_corr = channelCoherence(theta_epochs(i).pre_stim_post(:,postStimStart:end));
 end
 %%
-chan = 100;
+chan = 2;
 figure(1)
 plot(theta_epochs(chan).theta_filt,'Color',[1 1 1 0.25])
 hold on
@@ -52,13 +52,13 @@ plot(mean(theta_epochs(chan).pre_stim_post),'Color',[1 0 0])
 %% Visually Explore Data
 
 channels = unique([theta_epochs.channel_idx]);
-channel = channels(103);
+channel = channels(4);
 datIdx = ismember([theta_epochs.channel_idx],channel);
 % datIdx = 2471;
-% plot_channel(theta_epochs(datIdx),fs,1)
-plot_PSD(theta_epochs(datIdx),fs)
+plot_channel(theta_epochs(datIdx),fs,1)
+% plot_PSD(theta_epochs(datIdx),fs)
 % plot_time_frequency(theta_epochs(datIdx),fs)
-% plot_correlation(theta_epochs(datIdx))
+plot_correlation(theta_epochs(datIdx))
 
 %%
 function plot_channel(data,fs,showCorrelation)
@@ -72,7 +72,7 @@ set(fig,'Position',[100 100 1980 1020])
 tcl = tiledlayout(rows,cols);
 for i=1:length(data)
     ax = nexttile(tcl);
-    y = data(i).pre_stim_post;
+    y = data(i).full_trial;
     if showCorrelation
         base = mean(data(i).baseline_corr);
         stim = mean(data(i).stim_corr);

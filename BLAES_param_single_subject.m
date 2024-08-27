@@ -4,6 +4,8 @@ BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
 bci2ktools(BCI2KPath);
 boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
 Subject = 'BJH050';
+groupPath = fullfile(boxpath,'group');
+sections = 0;
 if exist(fullfile(boxpath,'Subject_Locations.xlsx'),'file')
     subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
     subject_info = table2struct(subject_info(strcmp(subject_info.Subject, Subject),:));
@@ -23,41 +25,63 @@ brain=load(fullfile(boxpath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
 
 load('colors.mat');
 dataPath = dir(sprintf("%s/%s/*.dat",boxpath,Subject));
-tic
 [signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name));
 states = parseStates(states);
 fs = params.SamplingRate.NumericValue;
 
 stimMap = parse_stimsweep_stimcodes(params);
-timeit = toc;
-fprintf("loading time elapsed %f s",timeit)
+fprintf('\ndone loading\n')
 preprocessFlag = 0;
 %% Preprocessing
 % Downsampling and Channel Idenficiation
 if ~preprocessFlag
     [states,signals,fs] = downsample_seeg(signals,states,fs,500);
-    if exist(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
+    if exist(fullfile(boxpath,Subject,sprintf("%s_MNI_new.mat",Subject)),'file')
+        disp('Found new VERA Struct')
+        brain = load(fullfile(boxpath,Subject,sprintf("%s_MNI_new.mat",Subject)));
+        channelKey = brain.electrodeNamesKey;
+        channelLocs = ~cellfun(@isempty,{channelKey.VERANames});
+        signals = signals(:,channelLocs);
+        dat_channelNames = params.ChannelNames.Value(channelLocs);
+        electrodeNames = brain.electrodes.Name;
+        regions = brain.electrodes.Label;
+        regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
+
+    elseif exist(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
+        disp('Found VERA INDEX')
         load(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
         channelLocs = find(~isnan(VERA_idx));
         signals = signals(:,channelLocs);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
+        electrodeNames = brain.electrodeNames;
+        regions = brain.SecondaryLabel;
+        regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
+    else
+        disp('No linking file between SEEG and Localization Found \n Removing ECG and Ref.')
+        parseCell = {'REF1','REF2','EKG1','EKG2'};
+        allchans = params.ChannelNames.Value;
+        channelLocs = ~ismember(parseCell,allchans);
+        signals = signals(:,channelLocs);
+        dat_channelNames = params.ChannelNames.Value(channelLocs);
+        elecrodeNames = dat_channelNames;
+        regions = dat_channelNames;
     end
     preprocessFlag = 1;
 end
 timing_adjust = 80; % ms, due to software triggered stimulation state.
 [signals, trigger,thresh] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers);
 [epochLocs,intervals] =getAllIntervals(states.StimulusCode,stimMap);
-fprintf('\ndone\n')
-% Epoching
-
+fprintf('\ndone preprocessing\n')
+%% Epoching
 pulseLocs= triggerEpochs(trigger,stimMap,timing_adjust,intervals,fs,8,1,thresh);
-theta_epochs = theta_burst_epoch(signals,brain.electrodeNames,intervals,states.CereStimStimulation,timing_adjust,fs,stimMap,pulseLocs);
+theta_epochs = theta_burst_epoch(signals,electrodeNames,intervals,timing_adjust,fs,stimMap,pulseLocs,regions);
 
 
 theta_band = [4 10]; % Hz
 smoothing_window = 0.1; % in seconds
 filterOrder = computeStableFilter(theta_band,'bandpass',fs);
 postStimStart = floor(2*fs);
+
 parfor i=1:length(theta_epochs)
     [theta_epochs(i).theta_power,theta_epochs(i).theta_phase, theta_epochs(i).theta_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,theta_band,filterOrder, ...
         'smooth',smoothing_window,'baselineDuration',1);
@@ -69,8 +93,9 @@ parfor i=1:length(theta_epochs)
 end
 % configs  = {'current' 'pw' 'freq' 'loc'};
 stimchannel_epochs = parseCondition(theta_epochs,'loc');
+fprintf('\ndone epoching\n')
 %% coherenence stats
-export_labs = {'code' 'label' 'current' 'pw' 'freq' 'loc' 'channel' 'charge' 'chargePerPhase' 'chargeUnits' 'shank' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr'};
+export_labs = {'code' 'region' 'label' 'current' 'pw' 'freq' 'loc' 'channel' 'charge' 'chargePerPhase' 'chargeUnits' 'shank' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr'};
 
 outstruct = struct();
 N = length(theta_epochs);
@@ -89,15 +114,20 @@ parfor i=1:N
     outstruct(i).post_p = p;
 
 end
+savepath = fullfile(groupPath,sprintf('%s_cohens.mat',Subject));
+save(savepath,"outstruct");
+fprintf('\n coherence analyzed\n')
 %% Fix Current Base Frequency
+if sections
 local_dat = stimchannel_epochs(1).entry([stimchannel_epochs(1).entry.current]==1);
 analysis_name = "1 mA";
 trajplot(local_dat,0,mainfigDir,fs,colors,analysis_name)
-
+end
 
 %% Charge Density
 %% Single Channel
 % close all
+if sections
 fig = figure(1);
 chan = 100;
 channel_name = brain.electrodeNames{chan};
@@ -123,21 +153,24 @@ end
 hold off
 linkaxes(tcl.Children,'x');
 sgtitle(channel_name,'Interpreter','none');
+end
 %% Each condition per trajectory
+if sections
 close all
 saveFigs = 0;
 dir = fullfile(mainfigDir,'trajs');
 trajplot(stimchannel_epochs(2).entry,0,dir,fs,colors);
-
-
+end
 
 %% Export Data for Method Testing
+if sections
 channels = [22 100 54 5 131];
 exp_idx = ismember([theta_epochs.channel_idx],channels);
 exportStruct = theta_epochs(exp_idx);
 exportPath = '/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param/method_building';
 save(fullfile(exportPath,'selected_data.mat'),"exportStruct");
 save(fullfile(exportPath,'fs.mat'),'fs');
+end
 %%
 
 function result = parseCondition(epoch_struct,condition_fieldname)
@@ -271,30 +304,36 @@ for i=1:length(intervals)
     trig(i).peaks = peaks;
 end
 end
-function x = theta_burst_epoch(signals,chan_lab,intervals,stimulation_state,timing_adjust,fs,stimMap,triggerEpochs)
+function x = theta_burst_epoch(signals,chan_lab,intervals,timing_adjust,fs,stimMap,triggerEpochs,regions)
 timing_adjust_samps = floor((timing_adjust / 1000) * fs);
 num_channels = size(signals,2);
+total_combos = num_channels * length(intervals);
+channelVector = repmat(linspace(1,num_channels,num_channels),length(intervals),1);
+channelVector = channelVector(:);
+indexVector = repmat(linspace(1,length(intervals),length(intervals)),num_channels,1);
 x = struct();
 stimCodes = [stimMap.Code];
 idx = 1;
 triggerCodes = [triggerEpochs.code];
 frequencies = linspace(1,250,250);
 for chan=1:num_channels
+    region = regions{chan};
     % x = struct();
     for interval_idx=1:length(intervals)
         onsets = intervals(interval_idx).start+timing_adjust_samps;
         offsets = intervals(interval_idx).stop+timing_adjust_samps;
         len = mean(offsets -onsets);
-        all_holder = zeros(length(onsets),3*len+1);
+        all_holder = zeros(length(onsets),3*(len+1));
         baseline_holder = zeros(length(onsets),len+1);
         signal_holder = zeros(length(onsets),len+1);
         raw_sig_holder = zeros(length(onsets),len+1);
+        recombined_holder = zeros(length(onsets),3*(len+1));
         % state = zeros(length(onsets),len+1);
         x(idx).code = intervals(interval_idx).code;
         stimloc = triggerEpochs(ismember(triggerCodes,intervals(interval_idx).code));
         for trial_num=1:length(onsets)
             peakset = stimloc.peaks(trial_num).n;
-            slice = signals(-len+onsets(trial_num):offsets(trial_num)+len,chan);
+            slice = signals(-len-1+onsets(trial_num):offsets(trial_num)+len+1,chan);
             slice_hp = getHighPassData(slice,2,4,fs);
             all_holder(trial_num,:) = slice_hp;
             d = signals(onsets(trial_num):offsets(trial_num),chan);
@@ -303,6 +342,10 @@ for chan=1:num_channels
             b = signals(baseline_window(1):baseline_window(2),chan);
             baseline = getHighPassData(b,2,4,fs);
             e = interpolateSpikes(d,peakset,stimloc.peaks(trial_num).stim_array,fs,10);
+            br = baseline - baseline(end);
+            sr = e - e(end);
+            pr = slice_hp(floor(2*fs)+1:end) - slice_hp(floor(2*fs)+1);
+            agg_denoised = [br; sr; pr];
             % figure(1)
             % plot(d,'LineWidth',4)
             % hold on
@@ -311,16 +354,19 @@ for chan=1:num_channels
             raw_sig_holder(trial_num,:) = d;
             signal_holder(trial_num,:) = e;
             baseline_holder(trial_num,:) = baseline;
+            recombined_holder(trial_num,:) = agg_denoised;
             % state(trial_num,:) = stimulation_state(onsets(trial_num):offsets(trial_num));
         end
         label_loc = find(stimCodes == intervals(interval_idx).code);
         label_loc = label_loc(1);
         x(idx).label = makeLabelFromCereConfig(stimMap(label_loc).Config,stimMap(label_loc).Electrode);
+        x(idx).region = region;
         x(idx).timing_adjust = timing_adjust;
         x(idx).signals = signal_holder; % trials x samples
         x(idx).raw_sig = raw_sig_holder;
         x(idx).baseline = baseline_holder;
         x(idx).pre_stim_post = all_holder;
+        x(idx).full_trial = recombined_holder;
         % x(idx).stim_state = state;
         x(idx).avg = mean(signal_holder,1);
         x(idx).std = std(signal_holder,1);
