@@ -105,7 +105,7 @@ video_num = 1; % video index, name and number below
 conditions2remove = [];% add the numeric value as they appear on the testing image
 generateTest = 1; % set to 1 to regenerate testing sequence and image, note it will not generate if any conditons are excluded. 
 rmHighestChargeCondition = 1; % set to 1 if removing highest amplitude-pulsewidth pair
-allowCCEPs = 1; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
+allowCCEPs = 0; % set to 1 for CCEPs leading and lagging the stimulation pulses, 0 for no CCEPs
 CCEP_amplitude = 1000; % uA
 CCEP_ISI = 1; % sec, duration following a CCEP 
 % Pathing

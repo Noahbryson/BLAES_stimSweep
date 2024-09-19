@@ -12,7 +12,8 @@
 % 
 % RETURNS
 % ----------------
-% SNR: signal to noise ratio of the signals
+% spike_idx: logical array of samples in the signal containing a
+% theoretical spike based on stim parameters. 
 function spike_idx = stim_prediction(signal, fs, fc_b, fc_m, n_peaks, duration, onsetSample)
 onsetSample = floor(onsetSample);
 n_cycles = duration * fc_m;

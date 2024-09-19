@@ -1,34 +1,46 @@
+clear 
 addpath(genpath('/Users/nkb/Documents/NCAN/code/BLAES_stimSweep'))
 addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
 BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
 bci2ktools(BCI2KPath);
+%%
 boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
-Subject = 'BJH050';
+
+all_subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
+% for subIdx = 2:height(all_subject_info)
+% UtahSubs = {'UIC202407' 'UIC202412' 'UIC202414'};
+% BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
+% for subIdx=1:length(BJHSubs)
+% subIdx = 2;
+Subject = 'UIC202414';
+% Subject = all_subject_info.Subject{subIdx};
+% Subject = BJHSubs{subIdx};
+%%
+disp(Subject)
 groupPath = fullfile(boxpath,'group');
 sections = 0;
-if exist(fullfile(boxpath,'Subject_Locations.xlsx'),'file')
-    subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
-    subject_info = table2struct(subject_info(strcmp(subject_info.Subject, Subject),:));
-    stim_info = struct();
-    stim_info(1).pair = subject_info.Pair1;stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
-    subject_info.Triggers = strsplit(subject_info.Triggers,',');
-    channelSort = 1;
-else
-    channelSort = 0;
-end
+subject_info = table2struct(all_subject_info(strcmp(all_subject_info.Subject, Subject),:));
+stim_info = struct();
+stim_info(1).pair = subject_info.Pair1;
+stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
+subject_info.Triggers = strsplit(subject_info.Triggers,',');
+    
 mainfigDir = fullfile(boxpath,Subject,"figures");
 if ~exist(mainfigDir,'dir')
     [~,~]=mkdir(mainfigDir);
 end
 run = 1;
-brain=load(fullfile(boxpath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
 
 load('colors.mat');
 dataPath = dir(sprintf("%s/%s/*.dat",boxpath,Subject));
-[signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name));
+[signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name),'-calibrated');
 states = parseStates(states);
 fs = params.SamplingRate.NumericValue;
-
+if contains(Subject,'UIC')
+    UtahFlag = 1;
+else
+    UtahFlag = 0;
+end
 stimMap = parse_stimsweep_stimcodes(params);
 fprintf('\ndone loading\n')
 preprocessFlag = 0;
@@ -40,15 +52,37 @@ if ~preprocessFlag
         disp('Found new VERA Struct')
         brain = load(fullfile(boxpath,Subject,sprintf("%s_MNI_new.mat",Subject)));
         channelKey = brain.electrodeNamesKey;
-        channelLocs = ~cellfun(@isempty,{channelKey.VERANames});
-        signals = signals(:,channelLocs);
+        if isempty(channelKey)
+        ChannelMap = load(fullfile(boxpath,Subject,"ChannelMap.mat"));
+        channelLocs = cellfun(@ischar,ChannelMap.ElecTypeProj);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
-        electrodeNames = brain.electrodes.Name;
-        regions = brain.electrodes.Label;
+        [dat_channelNames,electrodeNames,channelNameLoc,veraLoc] = indexChannelNames(dat_channelNames,brain.electrodes.Name);
+
+        channelLocs = cellfun(@(x) ~(strncmp(x, 'm', 1)),dat_channelNames);
+        dat_channelNames = dat_channelNames(channelLocs);
+        electrodeNames = electrodeNames(channelLocs);
+        veraLoc = veraLoc(channelLocs);
+        regions = brain.electrodes.Label(veraLoc);
         regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
+        signals = signals(:,channelNameLoc(channelLocs));
+        else
+        channelLocs = ~cellfun(@isempty,{channelKey.VERANames});
+        dat_channelNames = params.ChannelNames.Value(channelLocs);
+        [dat_channelNames,electrodeNameAlias,channelNameLoc,veraLoc] = indexChannelNames(dat_channelNames,{channelKey.EEGNames});
+        electrodeNames = {channelKey.VERANames};
+        electrodeNames = electrodeNames(veraLoc)';
+        [~,ia] = ismember(electrodeNames,brain.electrodes.Name);
+        regions = brain.electrodes.Label(ia);
+        regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
+        signals = signals(:,channelLocs);
+        signals = signals(:,channelNameLoc);
+        end
+        
+        
 
     elseif exist(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
         disp('Found VERA INDEX')
+        brain=load(fullfile(boxpath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
         load(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
         channelLocs = find(~isnan(VERA_idx));
         signals = signals(:,channelLocs);
@@ -56,6 +90,17 @@ if ~preprocessFlag
         electrodeNames = brain.electrodeNames;
         regions = brain.SecondaryLabel;
         regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
+    elseif exist(fullfile(boxpath,Subject,"ChannelMap.mat"),'file')
+        disp('Found Channel Map')
+
+        ChannelMap = load(fullfile(boxpath,Subject,"ChannelMap.mat"));
+        channelLocs = cellfun(@ischar,ChannelMap.ElecTypeProj);
+        signals = signals(:,channelLocs);
+        dat_channelNames = params.ChannelNames.Value(channelLocs);
+        electrodeNames = dat_channelNames;
+        regions = ChannelMap.ElecAtlasProj(channelLocs,1);
+        regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
+        UtahFlag = 1;
     else
         disp('No linking file between SEEG and Localization Found \n Removing ECG and Ref.')
         parseCell = {'REF1','REF2','EKG1','EKG2'};
@@ -63,39 +108,52 @@ if ~preprocessFlag
         channelLocs = ~ismember(parseCell,allchans);
         signals = signals(:,channelLocs);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
-        elecrodeNames = dat_channelNames;
+        electrodeNames = dat_channelNames;
         regions = dat_channelNames;
     end
     preprocessFlag = 1;
 end
 timing_adjust = 80; % ms, due to software triggered stimulation state.
-[signals, trigger,thresh] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers);
+[signals,trigger,thresh] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers);
 [epochLocs,intervals] =getAllIntervals(states.StimulusCode,stimMap);
 fprintf('\ndone preprocessing\n')
 %% Epoching
+tic
 pulseLocs= triggerEpochs(trigger,stimMap,timing_adjust,intervals,fs,8,1,thresh);
-theta_epochs = theta_burst_epoch(signals,electrodeNames,intervals,timing_adjust,fs,stimMap,pulseLocs,regions);
-
-
+theta_epochs = theta_burst_epoch(signals,electrodeNames,intervals,timing_adjust,fs,stimMap,pulseLocs,regions,UtahFlag);
+disp(toc)
+% clear signals states
+%%
 theta_band = [4 10]; % Hz
 smoothing_window = 0.1; % in seconds
 filterOrder = computeStableFilter(theta_band,'bandpass',fs);
+gammaFiltOrder= computeStableFilter([70,170],'bandpass',fs);
 postStimStart = floor(2*fs);
 
 parfor i=1:length(theta_epochs)
     [theta_epochs(i).theta_power,theta_epochs(i).theta_phase, theta_epochs(i).theta_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,theta_band,filterOrder, ...
         'smooth',smoothing_window,'baselineDuration',1);
-    theta_epochs(i).theta_power = zscore(theta_epochs(i).theta_power);
-    theta_epochs(i).theta_power = avg_baseline_correct(theta_epochs(i).theta_power,1,fs);
+    % theta_epochs(i).theta_power = zscore(theta_epochs(i).theta_power);
+    % theta_epochs(i).theta_power = avg_baseline_correct(theta_epochs(i).theta_power,1,fs);
     theta_epochs(i).baseline_corr = channelCoherence(theta_epochs(i).baseline);
     theta_epochs(i).stim_corr = channelCoherence(theta_epochs(i).signals);
     theta_epochs(i).post_corr = channelCoherence(theta_epochs(i).pre_stim_post(:,postStimStart:end));
+    % [theta_epochs(i).gamma_power,theta_epochs(i).gamma_phase, theta_epochs(i).gamma_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,[70 170],filterOrder, ...
+    %     'smooth',smoothing_window,'baselineDuration',1);
+    % theta_epochs(i).gamma_power = zscore(theta_epochs(i).gamma_power);
+    % theta_epochs(i).gamma_change = compareGammaPower(theta_epochs(i).baseline,theta_epochs(i).post_stim,fs,gammaFiltOrder);
+    [theta_change,gamma_change, theta_rest,theta_task,gamma_rest,gamma_task] = computeBandDifferences(theta_epochs(i).baseline,theta_epochs(i).post_stim,fs);
+    theta_epochs(i).theta_change = theta_change;
+    theta_epochs(i).gamma_change = gamma_change;
+    theta_epochs(i).theta_rest = theta_rest;
+    theta_epochs(i).theta_task = theta_task;
+    theta_epochs(i).gamma_rest = gamma_rest;
+    theta_epochs(i).gamma_task = gamma_task;
 end
-% configs  = {'current' 'pw' 'freq' 'loc'};
-stimchannel_epochs = parseCondition(theta_epochs,'loc');
 fprintf('\ndone epoching\n')
+
 %% coherenence stats
-export_labs = {'code' 'region' 'label' 'current' 'pw' 'freq' 'loc' 'channel' 'charge' 'chargePerPhase' 'chargeUnits' 'shank' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr'};
+export_labs = {'code' 'region' 'label' 'current' 'pw' 'freq' 'loc' 'channel' 'charge' 'chargePerPhase' 'chargeUnits' 'shank' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr' 'theta_change' 'gamma_change','theta_rest','theta_task','gamma_rest','gamma_task'};
 
 outstruct = struct();
 N = length(theta_epochs);
@@ -117,6 +175,7 @@ end
 savepath = fullfile(groupPath,sprintf('%s_cohens.mat',Subject));
 save(savepath,"outstruct");
 fprintf('\n coherence analyzed\n')
+% end
 %% Fix Current Base Frequency
 if sections
 local_dat = stimchannel_epochs(1).entry([stimchannel_epochs(1).entry.current]==1);
@@ -298,40 +357,47 @@ for i=1:length(intervals)
         else
             peaks(j).n = find(pkLoc ==1);
             peaks(j).stim_array = pkLoc;
+            peaks(j).expected = num_peaks;
         end
     end
     trig(i).signal = temp;
     trig(i).peaks = peaks;
 end
 end
-function x = theta_burst_epoch(signals,chan_lab,intervals,timing_adjust,fs,stimMap,triggerEpochs,regions)
+
+function x = theta_burst_epoch(signals,chan_lab,intervals,timing_adjust,fs,stimMap,triggerEpochs,regions,UtahFlag)
 timing_adjust_samps = floor((timing_adjust / 1000) * fs);
 num_channels = size(signals,2);
 total_combos = num_channels * length(intervals);
 channelVector = repmat(linspace(1,num_channels,num_channels),length(intervals),1);
 channelVector = channelVector(:);
-indexVector = repmat(linspace(1,length(intervals),length(intervals)),num_channels,1);
+indexVector = repmat(linspace(1,length(intervals),length(intervals)),num_channels,1)';
+indexVector = indexVector(:);
 x = struct();
 stimCodes = [stimMap.Code];
-idx = 1;
 triggerCodes = [triggerEpochs.code];
 frequencies = linspace(1,250,250);
-for chan=1:num_channels
+for idx=1:total_combos
+    chan = channelVector(idx);
+    interval_idx = indexVector(idx);
     region = regions{chan};
+
     % x = struct();
-    for interval_idx=1:length(intervals)
         onsets = intervals(interval_idx).start+timing_adjust_samps;
         offsets = intervals(interval_idx).stop+timing_adjust_samps;
         len = mean(offsets -onsets);
         all_holder = zeros(length(onsets),3*(len+1));
         baseline_holder = zeros(length(onsets),len+1);
         signal_holder = zeros(length(onsets),len+1);
-        raw_sig_holder = zeros(length(onsets),len+1);
+        post_sig_holder = zeros(length(onsets),len+1);
         recombined_holder = zeros(length(onsets),3*(len+1));
         % state = zeros(length(onsets),len+1);
         x(idx).code = intervals(interval_idx).code;
         stimloc = triggerEpochs(ismember(triggerCodes,intervals(interval_idx).code));
+        % figure(1);
+        % tcl = tiledlayout('flow');
         for trial_num=1:length(onsets)
+            % ax=nexttile(tcl);
             peakset = stimloc.peaks(trial_num).n;
             slice = signals(-len-1+onsets(trial_num):offsets(trial_num)+len+1,chan);
             slice_hp = getHighPassData(slice,2,4,fs);
@@ -341,17 +407,17 @@ for chan=1:num_channels
             d = getHighPassData(d,2,4,fs);
             b = signals(baseline_window(1):baseline_window(2),chan);
             baseline = getHighPassData(b,2,4,fs);
-            e = interpolateSpikes(d,peakset,stimloc.peaks(trial_num).stim_array,fs,10);
+            e = interpolateSpikes(d,peakset,stimloc.peaks(trial_num).stim_array,fs,10,stimloc.peaks(trial_num).expected);
+            % plot(ax,d)
+            % hold on
+            % plot(ax,e)
+            % hold off
             br = baseline - baseline(end);
-            sr = e - e(end);
+            sr = e - br(end);
             pr = slice_hp(floor(2*fs)+1:end) - slice_hp(floor(2*fs)+1);
             agg_denoised = [br; sr; pr];
-            % figure(1)
-            % plot(d,'LineWidth',4)
-            % hold on
-            % plot(e,'LineWidth',2)
-            % hold off
-            raw_sig_holder(trial_num,:) = d;
+       
+            post_sig_holder(trial_num,:) = pr;
             signal_holder(trial_num,:) = e;
             baseline_holder(trial_num,:) = baseline;
             recombined_holder(trial_num,:) = agg_denoised;
@@ -360,16 +426,15 @@ for chan=1:num_channels
         label_loc = find(stimCodes == intervals(interval_idx).code);
         label_loc = label_loc(1);
         x(idx).label = makeLabelFromCereConfig(stimMap(label_loc).Config,stimMap(label_loc).Electrode);
+        % title(ax,x(idx).label)
         x(idx).region = region;
         x(idx).timing_adjust = timing_adjust;
         x(idx).signals = signal_holder; % trials x samples
-        x(idx).raw_sig = raw_sig_holder;
+        x(idx).post_stim = post_sig_holder;
         x(idx).baseline = baseline_holder;
         x(idx).pre_stim_post = all_holder;
         x(idx).full_trial = recombined_holder;
         % x(idx).stim_state = state;
-        x(idx).avg = mean(signal_holder,1);
-        x(idx).std = std(signal_holder,1);
         % [~,psd_stim] = matrix_PSD(signal_holder',frequencies,fs);
         % [~,psd_rest] = matrix_PSD(baseline_holder',frequencies,fs);
         % x(idx).psd_rest = psd_rest;
@@ -392,14 +457,21 @@ for chan=1:num_channels
         x(idx).chargeUnits = "uC/cm^2";
         % charge = us * uA * numPulses * Hz * s/cm^2 = pC/cm^2 -> pC/cm^2 * 1e-6 = uC/cm^2
         % charge/phase = us * uA/cm^2= pC/cm^2-> pC/cm^2 *1e-6 = uC/cm^2
-        if ~isempty(strfind(chan_lab{chan},"'"))
-        traj = sprintf('%s_L',chan_lab{chan}(1));
-        
+        if ~UtahFlag
+            if ~isempty(strfind(chan_lab{chan},"'"))
+                traj = sprintf('%s_L',chan_lab{chan}(1));
+
+            else
+                traj = sprintf('%s_R',chan_lab{chan}(1));
+            end
+            if isstrprop(chan_lab{chan}(2),'digit')
+                traj = strcat(traj,chan_lab{chan}(2));
+            end
         else
-            traj = sprintf('%s_R',chan_lab{chan}(1));
-        end
-        if isstrprop(chan_lab{chan}(2),'digit')
-            traj = strcat(traj,chan_lab{chan}(2));
+            Side = chan_lab{chan}(1);
+            lab = chan_lab{chan}(2:end);
+            digloc = regexprep(lab, '[^a-zA-Z]','');      
+            traj = strjoin({digloc,Side},'_');
         end
         x(idx).shank = traj;
         [snr,~]= multi_SNR(signal_holder',8,fs,8);
@@ -407,8 +479,6 @@ for chan=1:num_channels
         % x(idx).snr_av = mean(snr);
         x(idx).channel_idx = chan;
         x(idx).stimloc = stimloc;
-        idx = idx+1;
-    end
     % x(k).epoch = x;
 end
 end
@@ -488,6 +558,10 @@ function x  = getCommonAverage(signals)
 x = mean(signals,2);
 end
 function [states,signals,fs_out]=downsample_seeg(signals,states,fs,newfs)
+if fs == newfs
+   fprintf('Signals have been previously downsampled to %.1f',newfs)
+   fs_out = fs;
+else
 ratio = round(fs/newfs,0);
 fs_out = fs/ratio;
 signals = signals(1:ratio:end,:);
@@ -496,5 +570,38 @@ for i=1:length(fields)
     states.(fields{i}) = states.(fields{i})(1:ratio:end);
 end
 
+end
+end
 
+
+function X = compareGammaPower(baseline, post, fs, filterOrder)
+[base,~,~] = timeseriesPower(baseline',fs,[70 170],filterOrder, ...
+        'smooth',0.1);
+[res,~,~] = timeseriesPower(post',fs,[70 170],filterOrder, ...
+        'smooth',0.1);
+plot(mean(base,2))
+hold on
+plot(mean(res,2))
+hold off
+
+end
+
+function [theta, gamma,baseline_th,task_th,baseline_g,task_g] = computeBandDifferences(baseline,signal,fs)
+frequencies = linspace(1,170,170);
+[~,base] = matrix_PSD(baseline',frequencies,fs);
+[~,res] = matrix_PSD(signal',frequencies,fs);
+baseline_th = base(2:10,:);
+task_th = res(2:10,:);
+baseline_g = base(70:170,:);
+task_g = res(70:170,:);
+gamma = task_g ./ baseline_g;
+theta = task_th ./ baseline_th;
+end
+
+
+function [datChans,brainChans,ia,ib] = indexChannelNames(datChans,brainChans)
+
+[~,ia,ib] = intersect(datChans,brainChans);
+brainChans = brainChans(ib);
+datChans = datChans(ia);
 end

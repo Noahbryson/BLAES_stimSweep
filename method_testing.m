@@ -1,67 +1,131 @@
-
+addpath(genpath('/Users/nkb/Documents/NCAN/code/BLAES_stimSweep'))
+addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
 loc = '/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param/method_building';
 files = dir(fullfile(loc,'*.mat'));
 if ~contains("selected_data.mat",{files.name})
-    theta_epochs = load(fullfile(loc,files(1).name));
-    theta_epochs = theta_epochs.local_data;
+    data = load(fullfile(loc,files(1).name));
+    data = data.local_data;
     for i=2:length(files)
         temp = load(fullfile(loc,files(i).name));
-        theta_epochs = [theta_epochs temp.local_data];
+        data = [data temp.local_data];
     end
 else
-    theta_epochs = load(fullfile(loc,"selected_data.mat"));
+    data = load(fullfile(loc,"selected_data.mat"));
     load(fullfile(loc,"fs.mat"));
-    theta_epochs = theta_epochs.exportStruct;
+    data = data.exportStruct;
 end
-[~,sortIdx] = sort([theta_epochs.charge]);
-theta_epochs = theta_epochs(sortIdx);
+[~,sortIdx] = sort([data.charge]);
+data = data(sortIdx);
 %% Theta Env
 close all
 theta_band = [4 10]; % Hz
 smoothing_window = 0.1; % in seconds
 filterOrder = computeStableFilter(theta_band,'bandpass',fs);
 postStimStart = floor(2*fs);
-for i=1:length(theta_epochs)
-    [theta_epochs(i).theta_power,theta_epochs(i).theta_phase, theta_epochs(i).theta_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,theta_band,filterOrder, ...
+for i=1:length(data)
+    [data(i).theta_power,data(i).theta_phase, data(i).theta_filt] = timeseriesPower(data(i).pre_stim_post',fs,theta_band,filterOrder, ...
         'smooth',smoothing_window,'baselineDuration',1);
-    theta_epochs(i).theta_power = zscore(theta_epochs(i).theta_power);
-    theta_epochs(i).theta_power = avg_baseline_correct(theta_epochs(i).theta_power,1,fs);
-    theta_epochs(i).baseline_corr = channelCoherence(theta_epochs(i).baseline);
-    theta_epochs(i).stim_corr = channelCoherence(theta_epochs(i).signals);
-    theta_epochs(i).post_corr = channelCoherence(theta_epochs(i).pre_stim_post(:,postStimStart:end));
+    data(i).theta_power = zscore(data(i).theta_power);
+    data(i).theta_power = avg_baseline_correct(data(i).theta_power,1,fs);
+    data(i).baseline_corr = channelCoherence(data(i).baseline);
+    data(i).stim_corr = channelCoherence(data(i).signals);
+    data(i).post_corr = channelCoherence(data(i).pre_stim_post(:,postStimStart:end));
 end
 %%
 chan = 2;
 figure(1)
-plot(theta_epochs(chan).theta_filt,'Color',[1 1 1 0.25])
+plot(data(chan).theta_filt,'Color',[1 1 1 0.25])
 hold on
-plot(mean(theta_epochs(chan).theta_filt,2),'Color',[1 0 0])
+plot(mean(data(chan).theta_filt,2),'Color',[1 0 0])
 
 figure(2)
-plot(theta_epochs(chan).theta_power,'Color',[1 1 1 0.25])
+plot(data(chan).theta_power,'Color',[1 1 1 0.25])
 hold on
-plot(mean(theta_epochs(chan).theta_power,2),'Color',[1 0 0])
+plot(mean(data(chan).theta_power,2),'Color',[1 0 0])
 
 figure(3)
-plot(theta_epochs(chan).pre_stim_post','Color',[1 1 1 0.25])
+plot(data(chan).pre_stim_post','Color',[1 1 1 0.25])
 hold on
-plot(mean(theta_epochs(chan).pre_stim_post),'Color',[1 0 0])
+plot(mean(data(chan).pre_stim_post),'Color',[1 0 0])
 %% Compute Differences in Power
 
 
 %% Visually Explore Data
-
-channels = unique([theta_epochs.channel_idx]);
-channel = channels(4);
-datIdx = ismember([theta_epochs.channel_idx],channel);
+close all
+dark = 1;
+channels = unique([data.channel_idx]);
+channel = channels(3);
+datIdx = ismember([data.channel_idx],channel);
 % datIdx = 2471;
-plot_channel(theta_epochs(datIdx),fs,1)
-% plot_PSD(theta_epochs(datIdx),fs)
-% plot_time_frequency(theta_epochs(datIdx),fs)
-plot_correlation(theta_epochs(datIdx))
+fig5=plot_theta(data(datIdx),fs,1);
+fig1=plot_channel(data(datIdx),fs,1,1);
+% fig2=plot_PSD(data(datIdx),fs,0);
+% figTaper=plot_PSD(data(datIdx),fs,0,1);
+% figGam = plot_gamma(data(datIdx),fs,1);
+
+fig3=plot_time_frequency(data(datIdx),fs,'FFT');
+% fig4=plot_correlation(data(datIdx));
 
 %%
-function plot_channel(data,fs,showCorrelation)
+function fig=plot_theta(data,fs,dark)
+
+rows = ceil(sqrt(length(data)));
+cols = ceil(length(data)/rows);
+chan = unique({data.channel});
+figName = strcat(chan,' raw');
+fig=figure('Name',figName{1},'Visible','on');
+set(fig,'Position',[100 100 1980 1020])
+tcl = tiledlayout(rows,cols);
+for i=1:length(data)
+    ax = nexttile(tcl);
+    y = data(i).theta_power;
+    
+    title(data(i).label)
+    t = linspace(0,size(y,1)/fs,size(y,1));
+    hold on
+    lim = max(abs(y(:)));
+    if dark
+    plot(ax,t,y,'Color',[1 1 1 0.25]);
+    else
+    plot(ax,t,y,'Color',[0 0 0 0.25]);
+    end
+    plot(ax,t,mean(y,2),'Color',[1 0 0],'LineWidth',3)
+    ylim([-lim lim])
+end
+
+linkaxes(tcl.Children,'x');
+end
+
+function fig=plot_gamma(data,fs,dark)
+
+rows = ceil(sqrt(length(data)));
+cols = ceil(length(data)/rows);
+chan = unique({data.channel});
+figName = strcat(chan,' raw');
+fig=figure('Name',figName{1},'Visible','on');
+set(fig,'Position',[100 100 1980 1020])
+tcl = tiledlayout(rows,cols);
+for i=1:length(data)
+    ax = nexttile(tcl);
+    y = data(i).gamma_power;
+    
+    title(data(i).label)
+    t = linspace(0,size(y,1)/fs,size(y,1));
+    hold on
+    lim = max(abs(y(:)));
+    if dark
+    plot(ax,t,y,'Color',[1 1 1 0.25]);
+    else
+    plot(ax,t,y,'Color',[0 0 0 0.25]);
+    end
+    plot(ax,t,mean(y,2),'Color',[1 0 0],'LineWidth',3)
+    ylim([-lim lim])
+end
+
+linkaxes(tcl.Children,'x');
+end
+
+function fig=plot_channel(data,fs,showCorrelation,dark)
 
 rows = ceil(sqrt(length(data)));
 cols = ceil(length(data)/rows);
@@ -77,23 +141,30 @@ for i=1:length(data)
         base = mean(data(i).baseline_corr);
         stim = mean(data(i).stim_corr);
         post = mean(data(i).post_corr);
-        d = post - base;
+        d1 = post - base;
+        d2 = stim - base;
         cor_str = sprintf('baseline %.3f, stim %.3f post %.3f',base,stim,post);
-        tit = sprintf("%s\nd=%.3f\n%s",data(i).label,d,cor_str);
+        tit = sprintf("%s\nstim d=%.3f post d=%.3f\n%s",data(i).label,d2,d1,cor_str);
         title(tit)
     else
         title(data(i).label)
     end
     t = linspace(0,size(y,2)/fs,size(y,2));
     hold on
+    lim = max(abs(y(:)));
+    if dark
     plot(ax,t,y','Color',[1 1 1 0.25]);
-    plot(ax,t,mean(y),'Color',[1 0 0])
+    else
+    plot(ax,t,y','Color',[0 0 0 0.25]);
+    end
+    plot(ax,t,mean(y),'Color',[1 0 0],'LineWidth',1.5,'LineStyle','--')
+    ylim([-lim lim])
 end
 
-linkaxes(tcl.Children);
+linkaxes(tcl.Children,'x');
 end
 
-function plot_correlation(data)
+function fig=plot_correlation(data)
 
 rows = ceil(sqrt(length(data)));
 cols = ceil(length(data)/rows);
@@ -128,7 +199,13 @@ linkaxes(tcl.Children);
 
 end
 
-function plot_time_frequency(data,fs)
+function fig=plot_time_frequency(data,fs,method)
+
+if method == "wavelet"
+    waveFlag = 1;
+else
+    waveFlag = 0;
+end
 
 rows = ceil(sqrt(length(data)));
 cols = ceil(length(data)/rows);
@@ -159,8 +236,8 @@ end
 linkaxes(tcl.Children);
 % ylim([0 30])
 end
-function plot_PSD(data,fs)
-
+function fig=plot_PSD(data,fs,multitaper,ratio)
+frequencies = linspace(1,200,200);
 rows = ceil(sqrt(length(data)));
 cols = ceil(length(data)/rows);
 chan = unique({data.channel});
@@ -172,27 +249,69 @@ endloc = floor(2*fs);
 stimloc = floor(fs);
 for i=1:length(data)
     ax = nexttile(tcl);
-    hold on
     
     Ndft = 128;
+    if ratio
+        leg = {'post','stim','stim-interp'};
+    else
+    
     leg = {'post','stim','stim-interp','pre'};
+    end 
+    % pre stim
+    y = mean(data(i).pre_stim_post(:,1:stimloc),1);
+    M = length(y);
+    g = hann(floor(M*0.5));
+    L = floor(0.25*M);
+    if multitaper
+        [Pxx_pre,f] = pmtm(y,3,M,frequencies,fs);
+    else
+        [Pxx_pre,f] = pwelch(y,g,L,frequencies,fs);
+    end    % Pxx = 20*log(Pxx);
+    if ~ratio
+    loglog(f,Pxx_pre,'Color',[0 1 0])
+    hold on
+    end
+
+
+    
     % post stim
     y = mean(data(i).pre_stim_post(:,endloc:end),1);
     M = length(y);
     g = hann(floor(M*0.5));
     L = floor(0.25*M);
-    [Pxx,f] = pwelch(y,g,L,[],fs);
+
+    if multitaper
+        [Pxx,f] = pmtm(y,3,M,frequencies,fs);
+    else
+        [Pxx,f] = pwelch(y,g,L,frequencies,fs);
+    end
     % Pxx = 20*log(Pxx);
-    loglog(f,Pxx,'Color',[0 0 1])
-    
+    if ratio
+        semilogx(f,Pxx./Pxx_pre,'Color',[0 0 1])
+        hold on
+    else
+        loglog(f,Pxx,'Color',[0 0 1])
+    end
+
+    % semilogx(f,Pxx,'Color',[0 0 1])
+
     % stim
     y = mean(data(i).pre_stim_post(:,stimloc:endloc),1);
     M = length(y);
     g = hann(floor(M*0.5));
     L = floor(0.25*M);
-    [Pxx,f] = pwelch(y,g,L,[],fs);
+    if multitaper
+        [Pxx,f] = pmtm(y,3,M,frequencies,fs);
+    else
+        [Pxx,f] = pwelch(y,g,L,frequencies,fs);
+    end
     % Pxx = 20*log(Pxx);
-    loglog(f,Pxx,'Color',[1 0 0])
+    if ratio
+        semilogx(f,Pxx./Pxx_pre,'Color',[1 0 0])
+    else
+        loglog(f,Pxx,'Color',[1 0 0])
+    end
+
 
 
     % stim - noise corrected
@@ -200,18 +319,17 @@ for i=1:length(data)
     M = length(y);
     g = hann(floor(M*0.5));
     L = floor(0.25*M);
-    [Pxx,f] = pwelch(y,g,L,[],fs);
-    % Pxx = 20*log(Pxx);
-    loglog(f,Pxx,'Color',[1 0 1 0.7])
-
-    % pre stim
-    y = mean(data(i).pre_stim_post(:,1:stimloc),1);
-    M = length(y);
-    g = hann(floor(M*0.5));
-    L = floor(0.25*M);
-    [Pxx,f] = pwelch(y,g,L,[],fs);
-    % Pxx = 20*log(Pxx);
-    loglog(f,Pxx,'Color',[0 1 0])
+    if multitaper
+        [Pxx,f] = pmtm(y,3,M,frequencies,fs);
+    else
+        [Pxx,f] = pwelch(y,g,L,frequencies,fs);
+    end    % Pxx = 20*log(Pxx);
+    if ratio
+        semilogx(f,Pxx./Pxx_pre,'Color',[1 0 1 0.7])
+    else
+        loglog(f,Pxx,'Color',[1 0 1 0.7])
+    end
+    
     tit = sprintf("%s\n %.3f %s",data(i).label,data(i).charge,data(i).chargeUnits);
     title(tit)
     ax.XScale = 'log';
@@ -227,17 +345,17 @@ end
 close all
 % trajplot(dat,0,pwd,fs,[],"theta-power",'field','theta_power','avgField',1)
 % trajplot(dat,0,pwd,fs,[],"raw",'field','pre_stim_post','avgField',1)
-trajplot(theta_epochs,0,pwd,fs,[],"theta-filt",'field','theta_filt','avgField',1)
+trajplot(data,0,pwd,fs,[],"theta-filt",'field','theta_filt','avgField',1)
 %%
 close all
-idx = [theta_epochs.current]==1;
-dat1 = theta_epochs(idx);
+idx = [data.current]==1;
+dat1 = data(idx);
 trajplot(dat1,0,pwd,fs,[],"theta-power",'field','theta_power','avgField',1)
 
 trajplot(dat1,0,pwd,fs,[],"theta-filt",'field','theta_filt','avgField',1)
 %% Filt vs Interp
 chan = 9;
-test = getLowPassData(theta_epochs(chan).raw_sig',60,4,fs);
+test = getLowPassData(data(chan).raw_sig',60,4,fs);
 test = getHighPassData(test,2,8,fs);
 close all
 fig = figure(1);
@@ -246,6 +364,6 @@ plot(test,'Color',[1 1 1 0.15])
 hold on
 plot(mean(test,2),'Color',[1 0 0])
 subplot(2,1,2)
-plot(theta_epochs(chan).signals','Color',[1 1 1 0.15])
+plot(data(chan).signals','Color',[1 1 1 0.15])
 hold on
-plot(mean(theta_epochs(chan).signals),'Color',[1 0 0])
+plot(mean(data(chan).signals),'Color',[1 0 0])
