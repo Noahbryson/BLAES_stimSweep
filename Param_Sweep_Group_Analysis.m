@@ -1,14 +1,21 @@
 %% Param Sweep Group Analysis
-addpath(genpath('/Users/nkb/Documents/NCAN/code/BLAES_stimSweep'))
-addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
-BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
+user = expanduser('~'); % Get local path for interoperability on different machines, function in my tools dir. 
+if ispc
+    boxpath = fullfile(user,"Box/Brunner Lab"); % Path to data
+     BCI2KPath = "C:\BCI2000\BCI2000";
+else
+    boxpath =  fullfile(user,'Library/CloudStorage/Box-Box/Brunner Lab'); % Path to data
+    BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
+end
+dataPath = fullfile(boxpath,"/DATA/BLAES/BLAES_param");
+addpath(genpath(fullfile('Documents/NCAN/code/BLAES_stimSweep',user)));
+addpath(genpath(fullfile('Documents/NCAN/code/MATLAB_tools',user)));
 bci2ktools(BCI2KPath);
-rawfilesavepath = '/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/Posters/SfN2024/Raw Files';
+rawfilesavepath = fullfile(boxpath,'/Posters/SfN2024/Raw Files');
 %% Load Data and Add necessary field for group analysis
-regionTable = readtable(fullfile("/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param","BrainRegionDictionary.xlsx"));
-boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
-groupPath = fullfile(boxpath,'group');
-subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
+regionTable = readtable(fullfile(dataPath,"BrainRegionDictionary.xlsx"));
+groupPath = fullfile(dataPath,'group');
+subject_info = readtable(fullfile(dataPath,'Subject_Locations.xlsx'));
 labs = {'stim_side', 'pair', 'anode', 'cathode', 'anode_region', 'cathode_region'};
 files = dir(fullfile(groupPath,'*_cohens.mat'));
 subjects = cell(length(files),1);
@@ -97,7 +104,7 @@ for i=1:length(files)
         end
         corrdat = [corrdat temp];
     end
-    tempBrain = load(fullfile(boxpath,subject,sprintf('%s_MNI_new.mat',subject)));
+    tempBrain = load(fullfile(dataPath,subject,sprintf('%s_MNI_new.mat',subject)));
     tempBrain = verifyElectrodes(tempBrain,unique({temp.channel}));
     brains(i).brain = tempBrain;
     brains(i).subject = subject;
@@ -114,7 +121,7 @@ all_rois = cellfun(@(x) regexprep(x, pattern, ''), all_rois, 'UniformOutput', fa
 pattern = '^(Right|Left)-';
 all_rois = cellfun(@(x) regexprep(x, pattern, ''), all_rois, 'UniformOutput', false);
 [corrdat(:).region_class] = deal(all_rois{:});
-simplified_regions = poolBrainRegions(all_rois,regionTable,boxpath);
+simplified_regions = poolBrainRegions(all_rois,regionTable,dataPath);
 [corrdat(:).pooled_region] = deal(simplified_regions{:});
 gammaDist = squeeze(mean(cat(3,corrdat.gamma_change),1));
 thetaDist = squeeze(mean(cat(3,corrdat.theta_change),1));
@@ -142,7 +149,7 @@ for j=1:length(corrdat)
     theta_p = signrank(theta_dist-1);
     gamma_dist = gammaDist(:,j);
     gamma_p = signrank(gamma_dist-1);
-    gamma_sp = signrank(gammaTask(:,j),gammaRest(:,j));
+    gamma_sp = signra  nk(gammaTask(:,j),gammaRest(:,j));
     theta_sp = signrank(thetaTask(:,j),thetaRest(:,j));
     corrdat(j).gamma_m = gammaMeans(j);
     corrdat(j).gamma_p = gamma_p * numCompares;
@@ -205,12 +212,16 @@ colors = cmap(sig_map,:);
 % inverse_map = (both_sig + stim_res + post_res -1 ) *-1;
 inverse_map = logical(sig_map -1);
 
-[sigfit,s1] = polyfit(stim_d(both_sig),post_d(both_sig),2);
-[allfit,s2] = polyfit(stim_d,post_d,2);
-Xvals = linspace(min(stim_d),max(stim_d),1000);
-[y_sig,d1] = polyval(sigfit,Xvals);
-[y_all,d2] = polyval(allfit,Xvals);
+[sigfit,s1] = polyfit(stim_d(both_sig),post_d(both_sig),1);
+Xvals1 = linspace(min(stim_d),max(stim_d),length(stim_d(both_sig)));
+[y_sig,d1] = polyval(sigfit,Xvals1,s1);
+[residual1, R_sqr1, RMSE1] = goodnessOfFit(post_d(both_sig),y_sig);
 
+
+[allfit,s2] = polyfit(stim_d,post_d,1);
+Xvals2 = linspace(min(stim_d),max(stim_d),length(stim_d));
+[y_all,d2] = polyval(allfit,Xvals2,s2);
+[residual2, R_sqr2, RMSE2] = goodnessOfFit(post_d,y_all);
 
 figure
 hold on
@@ -220,8 +231,8 @@ hold on
 % scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
 scatter(stim_d(~both_sig),post_d(~both_sig),10,[0 0 0])
 scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
-plot(Xvals,y_all,'LineStyle','--','LineWidth',2,'Color','black')
-plot(Xvals,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
+plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
+plot(Xvals1,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
 hold off
 
 xlabel('Stim vs Baseline (d)')
@@ -230,8 +241,111 @@ legend({'ns','both sig', 'stim sig only','post sig only'})
 title(sprintf('During Stim vs Post Stim Increase in Coherence n=%.d',length(subjects)))
 [rho,pval] = corr(agg(:,1),agg(:,2),"Type","Spearman");
 result = sprintf("R = %.4f\np = %.6f",rho,pval);
-text(0,0.6,result)
+text(0.35,0.6*max(post_d),result)
+saveas(gcf,fullfile(rawfilesavepath,'All_chan_corr.svg'))
 
+%% post-stim vs gamma
+stim_d = [corrdat.post_d];
+post_d = [corrdat.gamma_m];
+cmap = [[1 1 1]; [1 0 0]; [0 1 0]; [0 0 1]];
+alpha_sig = 0.05;
+agg = [[corrdat.stim_p];[corrdat.post_p]]';
+both_sig = all(agg < alpha_sig, 2);
+stim_sig = agg(:,1) < alpha_sig ;
+gamma_sig = [corrdat.gamma_p] < alpha_sig;
+theta_sig = [corrdat.theta_p] < alpha_sig;
+stim_nonsig = agg(:,2) >= alpha_sig;
+stim_res = stim_sig & stim_nonsig;
+post_sig = agg(:,2) < alpha_sig;
+post_nonsig = agg(:,1) >= alpha_sig;
+post_res = post_sig & post_nonsig;
+sig_map = both_sig + 2*stim_res + 3*post_res+1;
+colors = cmap(sig_map,:);
+% inverse_map = (both_sig + stim_res + post_res -1 ) *-1;
+inverse_map = logical(sig_map -1);
+
+[sigfit,s1] = polyfit(stim_d(both_sig),post_d(both_sig),1);
+Xvals1 = linspace(min(stim_d),max(stim_d),length(stim_d(both_sig)));
+[y_sig,d1] = polyval(sigfit,Xvals1,s1);
+[residual1, R_sqr1, RMSE1] = goodnessOfFit(post_d(both_sig),y_sig);
+
+
+[allfit,s2] = polyfit(stim_d,post_d,1);
+Xvals2 = linspace(min(stim_d),max(stim_d),length(stim_d));
+[y_all,d2] = polyval(allfit,Xvals2,s2);
+[residual2, R_sqr2, RMSE2] = goodnessOfFit(post_d,y_all);
+
+figure
+hold on
+% scatter(stim_d(~inverse_map),post_d(~inverse_map),10,[0 0 0]  )
+% scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
+% scatter(stim_d(stim_res),post_d(stim_res),30,[0 0 1])
+% scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
+scatter(stim_d(~both_sig),post_d(~both_sig),10,[0 0 0])
+scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
+% plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
+% plot(Xvals1,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
+hold off
+
+ylabel('Change in Gamma Power from Baseline (dB)')
+xlabel('Post-stim vs Baseline (d)')
+legend({'ns','both sig', 'stim sig only','post sig only'})
+title(sprintf('Entrainment vs Gamma Power Change n=%.d',length(subjects)))
+[rho,pval] = corr(agg(:,1),agg(:,2),"Type","Spearman");
+result = sprintf("R = %.4f\np = %.6f",rho,pval);
+text(0.35,0.6*max(post_d),result)
+saveas(gcf,fullfile(rawfilesavepath,'post-stim_vs_gamma.svg'))
+%% post-stim vs theta
+stim_d = [corrdat.post_d];
+post_d = [corrdat.theta_m];
+cmap = [[1 1 1]; [1 0 0]; [0 1 0]; [0 0 1]];
+alpha_sig = 0.05;
+agg = [[corrdat.stim_p];[corrdat.post_p]]';
+both_sig = all(agg < alpha_sig, 2);
+stim_sig = agg(:,1) < alpha_sig ;
+gamma_sig = [corrdat.gamma_p] < alpha_sig;
+theta_sig = [corrdat.theta_p] < alpha_sig;
+stim_nonsig = agg(:,2) >= alpha_sig;
+stim_res = stim_sig & stim_nonsig;
+post_sig = agg(:,2) < alpha_sig;
+post_nonsig = agg(:,1) >= alpha_sig;
+post_res = post_sig & post_nonsig;
+sig_map = both_sig + 2*stim_res + 3*post_res+1;
+colors = cmap(sig_map,:);
+% inverse_map = (both_sig + stim_res + post_res -1 ) *-1;
+inverse_map = logical(sig_map -1);
+
+[sigfit,s1] = polyfit(stim_d(both_sig),post_d(both_sig),1);
+Xvals1 = linspace(min(stim_d),max(stim_d),length(stim_d(both_sig)));
+[y_sig,d1] = polyval(sigfit,Xvals1,s1);
+[residual1, R_sqr1, RMSE1] = goodnessOfFit(post_d(both_sig),y_sig);
+
+
+[allfit,s2] = polyfit(stim_d,post_d,1);
+Xvals2 = linspace(min(stim_d),max(stim_d),length(stim_d));
+[y_all,d2] = polyval(allfit,Xvals2,s2);
+[residual2, R_sqr2, RMSE2] = goodnessOfFit(post_d,y_all);
+
+figure
+hold on
+% scatter(stim_d(~inverse_map),post_d(~inverse_map),10,[0 0 0]  )
+% scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
+% scatter(stim_d(stim_res),post_d(stim_res),30,[0 0 1])
+% scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
+scatter(stim_d(~both_sig),post_d(~both_sig),10,[0 0 0])
+scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
+plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
+plot(Xvals1,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
+hold off
+
+ylabel('Change in Theta Power from Baseline (dB)')
+xlabel('Post-stim vs Baseline (d)')
+legend({'ns','both sig', 'stim sig only','post sig only'})
+title(sprintf('Entrainment vs Theta Power Change n=%.d',length(subjects)))
+[rho,pval] = corr(agg(:,1),agg(:,2),"Type","Spearman");
+result = sprintf("R = %.4f\np = %.6f",rho,pval);
+text(0.35,0.6*max(post_d),result)
+saveas(gcf,fullfile(rawfilesavepath,'post-stim_vs_theta.svg'))
 %% Ipsi vs Contra Results in stim_d vs post_d
 sideIdx = ismember({corrdat.rec_side},'ipsi');
 sideIdx = sideIdx(both_sig);
@@ -259,8 +373,11 @@ scatter(stim_d_s(~sideIdx),post_d_s(~sideIdx),20,'red')
 result = sprintf("R = %.4f\np = %.4f",rho3,pval3);
 text(0,0.6,result)
 xlim([0 1])
+saveas(gcf,fullfile(rawfilesavepath,'ipsi_vs_contra_corr.svg'))
+
 % legend({'Ipsi','Contra'})
 hold off
+
 %% region plot
 close all
 both_sig = all(agg < alpha_sig, 2);
@@ -306,7 +423,9 @@ title("All Brain Regions with d > 0.3")
 %% Proportion of Significant Responses
 close all
 both_sig = all(agg < 0.05, 2);
-ROIs = {corrdat(both_sig).region};
+fieldname = 'pooled_region';
+
+ROIs = {corrdat(both_sig).(fieldname)};
 pattern = '^ctx-(rh|lh)-';
 ROIs = cellfun(@(x) regexprep(x, pattern, ''), ROIs, 'UniformOutput', false);
 pattern = '^(Right|Left)-';
@@ -316,7 +435,7 @@ post_stim = [corrdat(both_sig).post_d];
 thresh = 0.3; threshloc = post_stim > thresh;
 thresh_stim = post_stim(threshloc);
 thresh_roi = categorical(ROIs(threshloc));
-allname = {corrdat.region};
+allname = {corrdat.(fieldname)};
 pattern = '^ctx-(rh|lh)-';
 allname = cellfun(@(x) regexprep(x, pattern, ''), allname, 'UniformOutput', false);
 pattern = '^(Right|Left)-';
@@ -349,6 +468,7 @@ sortname = name(id);
 figure %
 bar(sortname,ratio)
 title('Proportion of Resonant Responses to all Responses Within a Brain Region')
+saveas(gcf,fullfile(rawfilesavepath,'resonant_hist.svg'))
 
 loc4 = ismember(sortname,thresh_roi);
 figure %

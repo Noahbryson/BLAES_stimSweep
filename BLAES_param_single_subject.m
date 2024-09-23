@@ -1,12 +1,18 @@
 clear 
-addpath(genpath('/Users/nkb/Documents/NCAN/code/BLAES_stimSweep'))
-addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
-BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
+user = expanduser('~'); % Get local path for interoperability on different machines, function in my tools dir. 
+if ispc
+    boxpath = fullfile(user,"Box/Brunner Lab"); % Path to data
+     BCI2KPath = "C:\BCI2000\BCI2000";
+else
+    boxpath =  fullfile(user,'Library/CloudStorage/Box-Box/Brunner Lab'); % Path to data
+    BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
+end
+datapath = fullfile(boxpath,"/DATA/BLAES/BLAES_param");
+addpath(genpath(fullfile(user,'Documents/NCAN/code/BLAES_stimSweep')));
+addpath(genpath(fullfile(user,'Documents/NCAN/code/MATLAB_tools')));
 bci2ktools(BCI2KPath);
 %%
-boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
-
-all_subject_info = readtable(fullfile(boxpath,'Subject_Locations.xlsx'));
+all_subject_info = readtable(fullfile(datapath,'Subject_Locations.xlsx'));
 % for subIdx = 2:height(all_subject_info)
 % UtahSubs = {'UIC202407' 'UIC202412' 'UIC202414'};
 % BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
@@ -17,7 +23,7 @@ Subject = 'UIC202414';
 % Subject = BJHSubs{subIdx};
 %%
 disp(Subject)
-groupPath = fullfile(boxpath,'group');
+groupPath = fullfile(datapath,'group');
 sections = 0;
 subject_info = table2struct(all_subject_info(strcmp(all_subject_info.Subject, Subject),:));
 stim_info = struct();
@@ -25,14 +31,14 @@ stim_info(1).pair = subject_info.Pair1;
 stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
 subject_info.Triggers = strsplit(subject_info.Triggers,',');
     
-mainfigDir = fullfile(boxpath,Subject,"figures");
+mainfigDir = fullfile(datapath,Subject,"figures");
 if ~exist(mainfigDir,'dir')
     [~,~]=mkdir(mainfigDir);
 end
 run = 1;
 
 load('colors.mat');
-dataPath = dir(sprintf("%s/%s/*.dat",boxpath,Subject));
+dataPath = dir(sprintf("%s/%s/*.dat",datapath,Subject));
 [signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name),'-calibrated');
 states = parseStates(states);
 fs = params.SamplingRate.NumericValue;
@@ -48,12 +54,12 @@ preprocessFlag = 0;
 % Downsampling and Channel Idenficiation
 if ~preprocessFlag
     [states,signals,fs] = downsample_seeg(signals,states,fs,500);
-    if exist(fullfile(boxpath,Subject,sprintf("%s_MNI_new.mat",Subject)),'file')
+    if exist(fullfile(datapath,Subject,sprintf("%s_MNI_new.mat",Subject)),'file')
         disp('Found new VERA Struct')
-        brain = load(fullfile(boxpath,Subject,sprintf("%s_MNI_new.mat",Subject)));
+        brain = load(fullfile(datapath,Subject,sprintf("%s_MNI_new.mat",Subject)));
         channelKey = brain.electrodeNamesKey;
         if isempty(channelKey)
-        ChannelMap = load(fullfile(boxpath,Subject,"ChannelMap.mat"));
+        ChannelMap = load(fullfile(datapath,Subject,"ChannelMap.mat"));
         channelLocs = cellfun(@ischar,ChannelMap.ElecTypeProj);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
         [dat_channelNames,electrodeNames,channelNameLoc,veraLoc] = indexChannelNames(dat_channelNames,brain.electrodes.Name);
@@ -80,20 +86,20 @@ if ~preprocessFlag
         
         
 
-    elseif exist(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
+    elseif exist(fullfile(datapath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
         disp('Found VERA INDEX')
-        brain=load(fullfile(boxpath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
-        load(fullfile(boxpath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
+        brain=load(fullfile(datapath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
+        load(fullfile(datapath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
         channelLocs = find(~isnan(VERA_idx));
         signals = signals(:,channelLocs);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
         electrodeNames = brain.electrodeNames;
         regions = brain.SecondaryLabel;
         regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
-    elseif exist(fullfile(boxpath,Subject,"ChannelMap.mat"),'file')
+    elseif exist(fullfile(datapath,Subject,"ChannelMap.mat"),'file')
         disp('Found Channel Map')
 
-        ChannelMap = load(fullfile(boxpath,Subject,"ChannelMap.mat"));
+        ChannelMap = load(fullfile(datapath,Subject,"ChannelMap.mat"));
         channelLocs = cellfun(@ischar,ChannelMap.ElecTypeProj);
         signals = signals(:,channelLocs);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
