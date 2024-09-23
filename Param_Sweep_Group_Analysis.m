@@ -3,6 +3,7 @@ addpath(genpath('/Users/nkb/Documents/NCAN/code/BLAES_stimSweep'))
 addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
 BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
 bci2ktools(BCI2KPath);
+rawfilesavepath = '/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/Posters/SfN2024/Raw Files';
 %% Load Data and Add necessary field for group analysis
 regionTable = readtable(fullfile("/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param","BrainRegionDictionary.xlsx"));
 boxpath = ('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param');
@@ -117,8 +118,21 @@ simplified_regions = poolBrainRegions(all_rois,regionTable,boxpath);
 [corrdat(:).pooled_region] = deal(simplified_regions{:});
 gammaDist = squeeze(mean(cat(3,corrdat.gamma_change),1));
 thetaDist = squeeze(mean(cat(3,corrdat.theta_change),1));
-gammaMeans = squeeze(median((mean(cat(3,corrdat.gamma_change),2)),1));
-thetaMeans = squeeze(median((mean(cat(3,corrdat.theta_change),2)),1));
+gammaMeans = 20*log(squeeze(median((mean(cat(3,corrdat.gamma_change),2)),1))); % ratio of post stim / baseline power (in dB)
+thetaMeans = 20*log(squeeze(median((mean(cat(3,corrdat.theta_change),2)),1))); % ratio of post stim / baseline power (in dB)
+
+% deltaGamma = squeeze(median(mean(cat(3,corrdat.gamma_task) - cat(3,corrdat.gamma_rest),1))); % absolute change from baseline
+% deltaTheta = squeeze(median(mean(cat(3,corrdat.theta_task) - cat(3,corrdat.theta_rest),1))); % absolute change from baseline
+deltaGamma = squeeze(median(mean((cat(3,corrdat.gamma_task) - cat(3,corrdat.gamma_rest))./cat(3,corrdat.gamma_rest)*100,1))); % percent change from baseline
+deltaTheta = squeeze(median(mean((cat(3,corrdat.theta_task) - cat(3,corrdat.theta_rest))./cat(3,corrdat.theta_rest)*100,1))); % percent change from baseline
+
+
+
+
+gammaTask = squeeze(mean(cat(3,corrdat.gamma_task),1));
+thetaTask = squeeze(mean(cat(3,corrdat.theta_task),1));
+gammaRest = squeeze(mean(cat(3,corrdat.gamma_rest),1));
+thetaRest = squeeze(mean(cat(3,corrdat.theta_rest),1));
 [x,y]=histcounts(categorical({corrdat.subject}));
 for j=1:length(corrdat)
     sub = corrdat(j).subject;
@@ -128,19 +142,49 @@ for j=1:length(corrdat)
     theta_p = signrank(theta_dist-1);
     gamma_dist = gammaDist(:,j);
     gamma_p = signrank(gamma_dist-1);
+    gamma_sp = signrank(gammaTask(:,j),gammaRest(:,j));
+    theta_sp = signrank(thetaTask(:,j),thetaRest(:,j));
     corrdat(j).gamma_m = gammaMeans(j);
     corrdat(j).gamma_p = gamma_p * numCompares;
+    corrdat(j).gamma_pair_p = gamma_sp;
+    corrdat(j).delta_gamma = deltaGamma(j);
+
     corrdat(j).theta_m = thetaMeans(j);
     corrdat(j).theta_p = theta_p * numCompares;
+    corrdat(j).theta_pair_p = theta_sp;
+    corrdat(j).delta_theta = deltaTheta(j);
     corrdat(j).post_p = corrdat(j).post_p * numCompares;
     corrdat(j).stim_p = corrdat(j).stim_p * numCompares;
 
 end
+%% Check paired Stats
+
+
 %% Plot All Trajectories
-trajFig = figure;
+fname ='Top Axial View';
+
+figure('Name',fname,'Position',[100 100 1000 1000]);
 ax = gca;
 ax = plotAllCoverageMNI(ax,brains,0);
+view(0,90)
+fp = fullfile(rawfilesavepath,sprintf('%s.png',fname));
+% saveas(gcf,fp,'png')
 
+fname ='Front Coronal View';
+figure('Name',fname,'Position',[100 100 1000 1000]);
+ax = gca;
+ax = plotAllCoverageMNI(ax,brains,0);
+view(180,0)
+fp = fullfile(rawfilesavepath,sprintf('%s.png',fname));
+% saveas(gcf,fp,'png')
+
+fname ='Left Saggital View';
+figure('Name',fname,'Position',[100 100 1000 1000]);
+ax = gca;
+ax = plotAllCoverageMNI(ax,brains,0);
+view(-90,0)
+fp = fullfile(rawfilesavepath,sprintf('%s.png',fname));
+% saveas(gcf,fp,'png')
 %% stim vs post-stim coherence
 stim_d = [corrdat.stim_d];
 post_d = [corrdat.post_d];
@@ -161,12 +205,23 @@ colors = cmap(sig_map,:);
 % inverse_map = (both_sig + stim_res + post_res -1 ) *-1;
 inverse_map = logical(sig_map -1);
 
+[sigfit,s1] = polyfit(stim_d(both_sig),post_d(both_sig),2);
+[allfit,s2] = polyfit(stim_d,post_d,2);
+Xvals = linspace(min(stim_d),max(stim_d),1000);
+[y_sig,d1] = polyval(sigfit,Xvals);
+[y_all,d2] = polyval(allfit,Xvals);
+
+
 figure
 hold on
-scatter(stim_d(~inverse_map),post_d(~inverse_map),10,[0 0 0]  )
+% scatter(stim_d(~inverse_map),post_d(~inverse_map),10,[0 0 0]  )
+% scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
+% scatter(stim_d(stim_res),post_d(stim_res),30,[0 0 1])
+% scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
+scatter(stim_d(~both_sig),post_d(~both_sig),10,[0 0 0])
 scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
-scatter(stim_d(stim_res),post_d(stim_res),30,[0 0 1])
-scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
+plot(Xvals,y_all,'LineStyle','--','LineWidth',2,'Color','black')
+plot(Xvals,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
 hold off
 
 xlabel('Stim vs Baseline (d)')
