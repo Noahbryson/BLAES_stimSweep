@@ -11,6 +11,7 @@ dataPath = fullfile(boxpath,"/DATA/BLAES/BLAES_param");
 addpath(genpath(fullfile('Documents/NCAN/code/BLAES_stimSweep',user)));
 addpath(genpath(fullfile('Documents/NCAN/code/MATLAB_tools',user)));
 bci2ktools(BCI2KPath);
+
 rawfilesavepath = fullfile(boxpath,'/Posters/SfN2024/Raw Files');
 %% Load Data and Add necessary field for group analysis
 regionTable = readtable(fullfile(dataPath,"BrainRegionDictionary.xlsx"));

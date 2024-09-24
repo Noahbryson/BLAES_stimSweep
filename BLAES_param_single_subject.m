@@ -18,7 +18,7 @@ all_subject_info = readtable(fullfile(datapath,'Subject_Locations.xlsx'));
 % BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
 % for subIdx=1:length(BJHSubs)
 % subIdx = 2;
-Subject = 'UIC202414';
+Subject = 'BJH050';
 % Subject = all_subject_info.Subject{subIdx};
 % Subject = BJHSubs{subIdx};
 %%
@@ -229,10 +229,10 @@ end
 
 %% Export Data for Method Testing
 if sections
-channels = [22 100 54 5 131];
+channels = [22 100 41 5 131];
 exp_idx = ismember([theta_epochs.channel_idx],channels);
 exportStruct = theta_epochs(exp_idx);
-exportPath = '/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param/method_building';
+exportPath = fullfile(datapath,'method_building');
 save(fullfile(exportPath,'selected_data.mat'),"exportStruct");
 save(fullfile(exportPath,'fs.mat'),'fs');
 end

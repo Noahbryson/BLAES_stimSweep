@@ -1,6 +1,16 @@
-addpath(genpath('/Users/nkb/Documents/NCAN/code/BLAES_stimSweep'))
-addpath(genpath('/Users/nkb/Documents/NCAN/code/MATLAB_tools'))
-loc = '/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/DATA/BLAES/BLAES_param/method_building';
+user = expanduser('~'); % Get local path for interoperability on different machines, function in my tools dir. 
+if ispc
+    boxpath = fullfile(user,"Box/Brunner Lab"); % Path to data
+     BCI2KPath = "C:\BCI2000\BCI2000";
+else
+    boxpath =  fullfile(user,'Library/CloudStorage/Box-Box/Brunner Lab'); % Path to data
+    BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
+end
+datapath = fullfile(boxpath,"/DATA/BLAES/BLAES_param");
+addpath(genpath(fullfile(user,'Documents/NCAN/code/BLAES_stimSweep')));
+addpath(genpath(fullfile(user,'Documents/NCAN/code/MATLAB_tools')));
+rawfilesavepath = fullfile(boxpath,'/Posters/SfN2024/Raw Files');
+loc = fullfile(datapath,'method_building');
 files = dir(fullfile(loc,'*.mat'));
 if ~contains("selected_data.mat",{files.name})
     data = load(fullfile(loc,files(1).name));
@@ -16,21 +26,7 @@ else
 end
 [~,sortIdx] = sort([data.charge]);
 data = data(sortIdx);
-%% Theta Env
-close all
-theta_band = [4 10]; % Hz
-smoothing_window = 0.1; % in seconds
-filterOrder = computeStableFilter(theta_band,'bandpass',fs);
-postStimStart = floor(2*fs);
-for i=1:length(data)
-    [data(i).theta_power,data(i).theta_phase, data(i).theta_filt] = timeseriesPower(data(i).pre_stim_post',fs,theta_band,filterOrder, ...
-        'smooth',smoothing_window,'baselineDuration',1);
-    data(i).theta_power = zscore(data(i).theta_power);
-    data(i).theta_power = avg_baseline_correct(data(i).theta_power,1,fs);
-    data(i).baseline_corr = channelCoherence(data(i).baseline);
-    data(i).stim_corr = channelCoherence(data(i).signals);
-    data(i).post_corr = channelCoherence(data(i).pre_stim_post(:,postStimStart:end));
-end
+
 %%
 chan = 2;
 figure(1)
@@ -47,8 +43,6 @@ figure(3)
 plot(data(chan).pre_stim_post','Color',[1 1 1 0.25])
 hold on
 plot(mean(data(chan).pre_stim_post),'Color',[1 0 0])
-%% Compute Differences in Power
-
 
 %% Visually Explore Data
 close all
@@ -57,13 +51,13 @@ channels = unique([data.channel_idx]);
 channel = channels(3);
 datIdx = ismember([data.channel_idx],channel);
 % datIdx = 2471;
-fig5=plot_theta(data(datIdx),fs,1);
-fig1=plot_channel(data(datIdx),fs,1,1);
-% fig2=plot_PSD(data(datIdx),fs,0);
+% fig5=plot_theta(data(datIdx),fs,1);
+% fig1=plot_channel(data(datIdx),fs,0,0);
+fig2=plot_PSD(data(datIdx),fs,0,1);
 % figTaper=plot_PSD(data(datIdx),fs,0,1);
 % figGam = plot_gamma(data(datIdx),fs,1);
 
-fig3=plot_time_frequency(data(datIdx),fs,'FFT');
+% fig3=plot_time_frequency(data(datIdx),fs,'FFT');
 % fig4=plot_correlation(data(datIdx));
 
 %%
@@ -136,6 +130,7 @@ set(fig,'Position',[100 100 1980 1020])
 tcl = tiledlayout(rows,cols);
 for i=1:length(data)
     ax = nexttile(tcl);
+    set(ax,'ButtonDownFcn',@fig_from_subplot)
     y = data(i).full_trial;
     if showCorrelation
         base = mean(data(i).baseline_corr);
@@ -175,6 +170,8 @@ set(fig,'Position',[100 100 1980 1020])
 tcl = tiledlayout(rows,cols);
 for i=1:length(data)
     ax = nexttile(tcl);
+    set(ax,'ButtonDownFcn',@fig_from_subplot)
+
     base = data(i).baseline_corr;
     stim = data(i).stim_corr;
     post = data(i).post_corr;
@@ -249,7 +246,8 @@ endloc = floor(2*fs);
 stimloc = floor(fs);
 for i=1:length(data)
     ax = nexttile(tcl);
-    
+    set(ax,'ButtonDownFcn',@fig_from_subplot)
+
     Ndft = 128;
     if ratio
         leg = {'post','stim','stim-interp'};
