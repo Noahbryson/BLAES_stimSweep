@@ -534,7 +534,7 @@ for i=1:length(features)
     X(:,i) = categorical(feat);
 end
 X(:,end) = ones(length(Y),1);
-[b,bint,r,rint,stats] = regress(Y,X);
+[pwI,bint,r,rint,stats] = regress(Y,X);
 
 %% Effect of Parameters Across Different Regions via PCA, Clumped Regions
 conditions = {'stimregion','current','pw','freq'};
@@ -599,28 +599,62 @@ for i=1:length(conditions)
 plotConditionAcrossRegions(corrdat,{corrdat.pooled_region},unique(regionTable.region),conditions{i},0);
 end
 
-%% Plot Trajectories with Effects
+%% Plot Trajectories with Effects One Cond, One View
+close all
+allcontacts = [];
+for i=1:length(brains)
+    contacts = brains(i).brain.electrodes.Location;
+    allcontacts = [allcontacts; contacts];
+end
+alpha_sig = 0.05;
+agg = [[corrdat.stim_p];[corrdat.post_p]];
+both_sig = all(agg < alpha_sig, 1);
+
 freqz = [33 50 80];
 pw = [250 500];
-amp = [1 2];
+amp = [2 1];
 locs = unique({corrdat.stimregion});
-figure
+stimcolors = [105, 103, 253; 103 , 253, 213]/256;
+figure(33)
 ax=gca;
 summer = 0;
-plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-plotTrajectoriesWithEffect(ax,corrdat,2,250,locs{1},50,'post_d',[1 0 0])
-% for a=1:2
-%     for b=1:2
-%         for c =1:3
-%             for d=1:3
-% 
-% 
-%                 [~,x] = plotTrajectoriesWithEffect(ax,corrdat,amp(a),pw(b),locs{c},freqz(d));
-%                 summer = summer +x;
-%             end
-%         end
-%     end
-% end
+plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
+    "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+plotTrajectoriesWithEffect(ax,corrdat,2,250,locs{1},freqz,'post_d',brains(1).brain.electrodes.Location,stimcolors(1,:),1.5,both_sig);
+
+figure(34)
+ax=gca;
+plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
+    "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+plotTrajectoriesWithEffect(ax,corrdat,1,250,locs{1},freqz,'post_d',brains(1).brain.electrodes.Location,stimcolors(2,:),1.5,both_sig);
+
+
+%% Export Trajectory Figs
+figsavepath = fullfile(rawfilesavepath,'brain_bois');
+freqz = [33 50 80];
+pw = [250 500];
+amp = [2 1];
+locs = unique({corrdat.stimregion});
+stimcolors = [105, 103, 253; 103 , 253, 213]/256;
+for freqI=1:3
+    for pwI=1:2
+        for locI =1:3
+            f =figure;
+            tcl = tiledlayout('flow');
+            ax1 = nexttile(tcl);
+            plot3DModel(ax1,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
+                "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+            
+                [ax1,~] = plotTrajectoriesWithEffect(ax1,corrdat,amp(1),pw(pwI),locs{locI},freqz(freqI), ...
+                    'post_d',brains(1).brain.electrodes.Location,stimcolors(1,:));
+                [ax1,~] = plotTrajectoriesWithEffect(ax1,corrdat,amp(2),pw(pwI),locs{locI},freqz(freqI), ...
+                    'post_d',[],stimcolors(2,:));
+            
+            ax2 = nexttile(tcl);
+            % copy res from axl to the two other axes for all views. 
+        end
+    end
+end
 
 
 
@@ -628,7 +662,10 @@ plotTrajectoriesWithEffect(ax,corrdat,2,250,locs{1},50,'post_d',[1 0 0])
 
 
 %%
-function [ax,num] = plotTrajectoriesWithEffect(ax,data,amp,pw,loc,freq,effectName,basecolor)
+function [ax,num] = plotTrajectoriesWithEffect(ax,data,amp,pw,loc,freq,effectName,allElectrodes,basecolor,minsize,sigloc)
+if ~isempty(sigloc)
+    data = data(sigloc);
+end
 freqloc = ismember([data.freq],freq);
 amploc = ismember([data.current],amp);
 pwloc = ismember([data.pw],pw);
@@ -640,15 +677,14 @@ num = sum(idx);
 positions = {data(idx).position};
 effect = [data(idx).(effectName)];
 hold on
-counter = 1;
-for i=1:length(idx)
+if ~isempty(allElectrodes)
+    plotBallsOnVolume(ax,allElectrodes,[0 0 0],minsize/2,'FaceAlpha',1);
+end
+for i=1:num
     c = basecolor;
-    plotBallsOnVolume(ax,[data(idx).position],[0 0 0],.5);
-    if idx(i) == 1
-            r = 0.5 + 5 * effect(counter) / max(abs(effect));
-            plotBallsOnVolume(ax,positions{counter},c,r);
-            counter= counter+1;
-    end
+    r = minsize + 5 * effect(i) / max(abs(effect));
+    plotBallsOnVolume(ax,positions{i},c,r,'FaceAlpha',1);
+    
 end
 hold off
 
