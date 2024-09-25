@@ -27,6 +27,21 @@ end
 [~,sortIdx] = sort([data.charge]);
 data = data(sortIdx);
 
+
+%%
+theta_band = [4 10]; % Hz
+smoothing_window = 0.1; % in seconds
+filterOrder = computeStableFilter(theta_band,'bandpass',fs);
+postStimStart = floor(2*fs);
+sample_num=100;
+% [data(sample_num).theta_power,data(sample_num).theta_phase, data(sample_num).theta_filt] = timeseriesPower(data(sample_num).pre_stim_post',fs,theta_band,filterOrder, ...
+%     'smooth',smoothing_window,'baselineDuration',1);
+% samp_theta_power   = zscore(data(sample_num).theta_power);
+% samp_theta_power   = avg_baseline_correct(data(sample_num).theta_power,1,fs);
+samp_baseline_corr = channelCoherence(data(sample_num).baseline);
+samp_stim_corr     = channelCoherence(data(sample_num).signals);
+samp_post_corr     = channelCoherence(data(sample_num).pre_stim_post(:,postStimStart:end));
+
 %%
 chan = 2;
 figure(1)
@@ -53,12 +68,12 @@ datIdx = ismember([data.channel_idx],channel);
 % datIdx = 2471;
 % fig5=plot_theta(data(datIdx),fs,1);
 % fig1=plot_channel(data(datIdx),fs,0,0);
-fig2=plot_PSD(data(datIdx),fs,0,1);
+% fig2=plot_PSD(data(datIdx),fs,0,1);
 % figTaper=plot_PSD(data(datIdx),fs,0,1);
 % figGam = plot_gamma(data(datIdx),fs,1);
 
 % fig3=plot_time_frequency(data(datIdx),fs,'FFT');
-% fig4=plot_correlation(data(datIdx));
+fig4=plot_correlation(data(datIdx));
 
 %%
 function fig=plot_theta(data,fs,dark)

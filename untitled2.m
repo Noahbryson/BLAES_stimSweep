@@ -50,7 +50,8 @@ spikesig(pkl) = 1;
 interpres = interpolateSpikes(filt_data,0,spikesig,fs,10,10);
 hold off
 ax = nexttile(tcl);
-plot(ax,time,testSignal)
+[b,a] = butter(4,2/Fn,'high');
+plot(ax,time,filt_data)
 hold on
 plot(ax,time,interpres)
 hold off

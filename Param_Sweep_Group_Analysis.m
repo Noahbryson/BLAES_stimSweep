@@ -67,6 +67,19 @@ for i=1:length(files)
         for j=1:length(labs)
             [temp(:).(labs{j})] = deal(stimInfo{:,j});
         end
+        tempBrain = load(fullfile(dataPath,subject,sprintf('%s_MNI_new.mat',subject)));
+        [tempBrain, channelMap] = verifyElectrodes(tempBrain,unique({temp.channel}));
+        positions = cell(length(temp),1);
+        for j=1:length(channelMap)
+            chan = channelMap{j,1};
+            idxs = ismember({temp.channel},chan);
+            idcs = find(idxs>0);
+            for k=1:sum(idxs)
+            positions{idcs(k)} = channelMap{j,2};      
+        
+            end
+        end
+        [temp(:).position] = deal(positions{:});
         corrdat = temp;
         
     else
@@ -103,17 +116,30 @@ for i=1:length(files)
         for j=1:length(labs)
             [temp(:).(labs{j})] = deal(stimInfo{:,j});
         end
+        tempBrain = load(fullfile(dataPath,subject,sprintf('%s_MNI_new.mat',subject)));
+        [tempBrain, channelMap] = verifyElectrodes(tempBrain,unique({temp.channel}));
+        positions = cell(length(temp),1);
+        for j=1:length(channelMap)
+            chan = channelMap{j,1};
+            idxs = ismember({temp.channel},chan);
+            idcs = find(idxs>0);
+            for k=1:sum(idxs)
+            positions{idcs(k)} = channelMap{j,2};      
+        
+            end
+        end
+        [temp(:).position] = deal(positions{:});
         corrdat = [corrdat temp];
     end
-    tempBrain = load(fullfile(dataPath,subject,sprintf('%s_MNI_new.mat',subject)));
-    tempBrain = verifyElectrodes(tempBrain,unique({temp.channel}));
+    
+
     brains(i).brain = tempBrain;
     brains(i).subject = subject;
 end
 clear temp tt
 recSide = {corrdat.shank}; stimSide = {corrdat.stim_side};
-ipsi = checkIpsiShank(recSide,stimSide)';
-[corrdat(:).rec_side] = deal(ipsi{:});
+ipsi_l = checkIpsiShank(recSide,stimSide)';
+[corrdat(:).rec_side] = deal(ipsi_l{:});
 stimregion = identifyStimRegion({corrdat.anode_region},{corrdat.cathode_region});
 [corrdat(:).stimregion] = deal(stimregion{:});
 all_rois = {corrdat.region};
@@ -150,7 +176,7 @@ for j=1:length(corrdat)
     theta_p = signrank(theta_dist-1);
     gamma_dist = gammaDist(:,j);
     gamma_p = signrank(gamma_dist-1);
-    gamma_sp = signra  nk(gammaTask(:,j),gammaRest(:,j));
+    gamma_sp = signrank(gammaTask(:,j),gammaRest(:,j));
     theta_sp = signrank(thetaTask(:,j),thetaRest(:,j));
     corrdat(j).gamma_m = gammaMeans(j);
     corrdat(j).gamma_p = gamma_p * numCompares;
@@ -232,19 +258,67 @@ hold on
 % scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
 scatter(stim_d(~both_sig),post_d(~both_sig),10,[0 0 0])
 scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
-plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
 plot(Xvals1,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
+
+plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
 hold off
 
 xlabel('Stim vs Baseline (d)')
 ylabel('Post-stim vs Baseline (d)')
-legend({'ns','both sig', 'stim sig only','post sig only'})
+legend({'ns','significant', 'significant LBF','all LBF'})
 title(sprintf('During Stim vs Post Stim Increase in Coherence n=%.d',length(subjects)))
-[rho,pval] = corr(agg(:,1),agg(:,2),"Type","Spearman");
+[rho,pval] = corr(stim_d(both_sig)',post_d(both_sig)',"Type","Spearman");
 result = sprintf("R = %.4f\np = %.6f",rho,pval);
 text(0.35,0.6*max(post_d),result)
 saveas(gcf,fullfile(rawfilesavepath,'All_chan_corr.svg'))
+%% Ipsi vs Contra Results in stim_d vs post_d
+sideIdx = ismember({corrdat.rec_side},'ipsi');
+sideIdx = sideIdx(both_sig);
+stim_d_s = stim_d(both_sig);
+post_d_s = post_d(both_sig);
+figure('Name','Ipsi v Contra All Responses')
+hold on
+scatter(stim_d_s(sideIdx),post_d_s(sideIdx),20,'blue')
+title('All Significant Responses Ipsilateral to Stim Site')
+xlabel('Stim vs Baseline (d)')
+ylabel('Post-stim vs Baseline (d)')
+[rho2,pval2] = corr(stim_d_s(sideIdx)',post_d_s(sideIdx)',"Type","Spearman");
+result = sprintf("ipsi R = %.4f\np = %.4f",rho2,pval2);
+xlim([0 1])
+text(0.3,1.7,result)
 
+title('All Significant Responses Contralateral to Stim Site')
+xlabel('Stim vs Baseline (d)')
+ylabel('Post-stim vs Baseline (d)')
+scatter(stim_d_s(~sideIdx),post_d_s(~sideIdx),20,'red')
+[rho3,pval3] = corr(stim_d_s(~sideIdx)',post_d_s(~sideIdx)',"Type","Spearman");
+result = sprintf("contra R = %.4f\np = %.4f",rho3,pval3);
+text(0.3,1.20,result)
+xlim([0 1])
+ylim([-.20 2.00])
+legend({'ipsi' 'contra'})
+saveas(gcf,fullfile(rawfilesavepath,'ipsi_vs_contra_corr.svg'))
+hold off
+
+figure
+ipsi_l = ones(length(post_d_s(sideIdx)),1);
+contra_l = 2*ones(length(post_d_s(~sideIdx)),1);
+ipsi = post_d_s(sideIdx);
+hold on
+boxchart(ipsi_l,ipsi)
+scatter(ipsi_l,ipsi);
+scatter(1,median(ipsi), 300)
+contra = post_d_s(~sideIdx);
+boxchart(contra_l,contra)
+scatter(contra_l,contra);
+scatter(2,median(contra), 300)
+legend({'' 'ipsi' '' '' 'contra' ''})
+ylim([-.1 1.1])
+xlim([0 3])
+ipsi_p = ranksum(ipsi_l,contra_l);
+ipsi_d = mean(ipsi) - mean(contra);
+text(1.5, 0.5, sprintf('d=%.4f\np=%.6f',ipsi_d,ipsi_p))
+saveas(gcf,fullfile(rawfilesavepath,'ipsi_vs_contra_dists.svg'))
 %% post-stim vs gamma
 stim_d = [corrdat.post_d];
 post_d = [corrdat.gamma_m];
@@ -284,15 +358,17 @@ hold on
 % scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
 scatter(stim_d(~both_sig),post_d(~both_sig),10,[0 0 0])
 scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
-% plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
-% plot(Xvals1,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
+plot(Xvals1,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
+plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
+
 hold off
 
 ylabel('Change in Gamma Power from Baseline (dB)')
 xlabel('Post-stim vs Baseline (d)')
-legend({'ns','both sig', 'stim sig only','post sig only'})
+legend({'ns','significant', 'significant LBF','all LBF'})
 title(sprintf('Entrainment vs Gamma Power Change n=%.d',length(subjects)))
-[rho,pval] = corr(agg(:,1),agg(:,2),"Type","Spearman");
+[rho,pval] = corr(stim_d(both_sig)',post_d(both_sig)',"Type","Spearman");
+
 result = sprintf("R = %.4f\np = %.6f",rho,pval);
 text(0.35,0.6*max(post_d),result)
 saveas(gcf,fullfile(rawfilesavepath,'post-stim_vs_gamma.svg'))
@@ -335,49 +411,18 @@ hold on
 % scatter(stim_d(post_res),post_d(post_res),30,[0 1 0])
 scatter(stim_d(~both_sig),post_d(~both_sig),10,[0 0 0])
 scatter(stim_d(both_sig),post_d(both_sig),30,[1 0 0])
-plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
 plot(Xvals1,y_sig,'LineStyle','-','LineWidth',2,'Color','black')
+plot(Xvals2,y_all,'LineStyle','--','LineWidth',2,'Color','black')
 hold off
 
 ylabel('Change in Theta Power from Baseline (dB)')
 xlabel('Post-stim vs Baseline (d)')
-legend({'ns','both sig', 'stim sig only','post sig only'})
+legend({'ns','significant', 'significant LBF','all LBF'})
 title(sprintf('Entrainment vs Theta Power Change n=%.d',length(subjects)))
-[rho,pval] = corr(agg(:,1),agg(:,2),"Type","Spearman");
+[rho,pval] = corr(stim_d(both_sig)',post_d(both_sig)',"Type","Spearman");
 result = sprintf("R = %.4f\np = %.6f",rho,pval);
 text(0.35,0.6*max(post_d),result)
 saveas(gcf,fullfile(rawfilesavepath,'post-stim_vs_theta.svg'))
-%% Ipsi vs Contra Results in stim_d vs post_d
-sideIdx = ismember({corrdat.rec_side},'ipsi');
-sideIdx = sideIdx(both_sig);
-stim_d_s = stim_d(both_sig);
-post_d_s = post_d(both_sig);
-figure('Name','Ipsi v Contra All Responses')
-subplot(2,1,1)
-hold on
-scatter(stim_d_s(sideIdx),post_d_s(sideIdx),20,'blue')
-title('All Significant Responses Ipsilateral to Stim Site')
-xlabel('Stim vs Baseline (d)')
-ylabel('Post-stim vs Baseline (d)')
-[rho2,pval2] = corr(stim_d_s(sideIdx)',post_d_s(sideIdx)',"Type","Spearman");
-result = sprintf("R = %.4f\np = %.4f",rho2,pval2);
-xlim([0 1])
-text(0,0.6,result)
-hold off
-subplot(2,1,2)
-title('All Significant Responses Contralateral to Stim Site')
-xlabel('Stim vs Baseline (d)')
-ylabel('Post-stim vs Baseline (d)')
-hold on
-scatter(stim_d_s(~sideIdx),post_d_s(~sideIdx),20,'red')
-[rho3,pval3] = corr(stim_d_s(~sideIdx)',post_d_s(~sideIdx)',"Type","Spearman");
-result = sprintf("R = %.4f\np = %.4f",rho3,pval3);
-text(0,0.6,result)
-xlim([0 1])
-saveas(gcf,fullfile(rawfilesavepath,'ipsi_vs_contra_corr.svg'))
-
-% legend({'Ipsi','Contra'})
-hold off
 
 %% region plot
 close all
@@ -552,10 +597,64 @@ end
 for i=1:length(conditions)
 % plotConditionAcrossRegions(corrdat,{corrdat.pooled_region},unique(regionTable.region),conditions{i},sig_ipsi);
 plotConditionAcrossRegions(corrdat,{corrdat.pooled_region},unique(regionTable.region),conditions{i},0);
+end
 
+%% Plot Trajectories with Effects
+freqz = [33 50 80];
+pw = [250 500];
+amp = [1 2];
+locs = unique({corrdat.stimregion});
+figure
+ax=gca;
+summer = 0;
+plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+plotTrajectoriesWithEffect(ax,corrdat,2,250,locs{1},50,'post_d',[1 0 0])
+% for a=1:2
+%     for b=1:2
+%         for c =1:3
+%             for d=1:3
+% 
+% 
+%                 [~,x] = plotTrajectoriesWithEffect(ax,corrdat,amp(a),pw(b),locs{c},freqz(d));
+%                 summer = summer +x;
+%             end
+%         end
+%     end
+% end
+
+
+
+
+
+
+%%
+function [ax,num] = plotTrajectoriesWithEffect(ax,data,amp,pw,loc,freq,effectName,basecolor)
+freqloc = ismember([data.freq],freq);
+amploc = ismember([data.current],amp);
+pwloc = ismember([data.pw],pw);
+locloc = ismember({data.stimregion},loc);
+allloc = [freqloc; amploc; pwloc; locloc];
+idx = all(allloc == 1,1);
+ref = find(idx > 0);
+num = sum(idx);
+positions = {data(idx).position};
+effect = [data(idx).(effectName)];
+hold on
+counter = 1;
+for i=1:length(idx)
+    c = basecolor;
+    plotBallsOnVolume(ax,[data(idx).position],[0 0 0],.5);
+    if idx(i) == 1
+            r = 0.5 + 5 * effect(counter) / max(abs(effect));
+            plotBallsOnVolume(ax,positions{counter},c,r);
+            counter= counter+1;
+    end
+end
+hold off
 
 end
-%%
+
+
 function fig = plotPCAConditionAcrossRegions(PCAdata,RegionData, ...
     condData,ROIs,indexer,color)
 
@@ -771,12 +870,17 @@ ax.YScale ='log';
 
 end
 
-function brain = verifyElectrodes(brain,electrodes)
+function [brain, channelMap] = verifyElectrodes(brain,electrodes)
 electrodeNames=brain.electrodes.Name;
 locs = ismember(electrodeNames,electrodes);
 brain.electrodes.DefinitionIdentifier = brain.electrodes.DefinitionIdentifier(locs);
 brain.electrodes.Annotation = brain.electrodes.Annotation(locs);
 brain.electrodes.Label = brain.electrodes.Label(locs);
 brain.electrodes.Name = brain.electrodes.Name(locs);
-brain.electrodes.Location = brain.electrodes.Location(locs,:);   
+brain.electrodes.Location = brain.electrodes.Location(locs,:);
+channelMap = cell(length(brain.electrodes.Name),2);
+for i=1:length(brain.electrodes.Name)
+    channelMap{i,1} = brain.electrodes.Name{i};
+    channelMap{i,2} = brain.electrodes.Location(i,:);
+end
 end
