@@ -624,39 +624,66 @@ ax=gca;
 summer = 0;
 plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
     "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-plotTrajectoriesWithEffect(ax,corrdat,2,250,locs{1},freqz,'post_d',brains(1).brain.electrodes.Location,stimcolors(1,:),1.5,both_sig);
-
+plotTrajectoriesWithEffect(ax,corrdat,2,250,locs{1},freqz,'post_d',allcontacts ,stimcolors(1,:),1.5,both_sig);
+view(-135,45)
 figure(34)
 ax=gca;
 plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
     "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-plotTrajectoriesWithEffect(ax,corrdat,1,250,locs{1},freqz,'post_d',brains(1).brain.electrodes.Location,stimcolors(2,:),1.5,both_sig);
-
+plotTrajectoriesWithEffect(ax,corrdat,1,250,locs{1},freqz,'post_d',allcontacts,stimcolors(2,:),1.5,both_sig);
+view(180,0)
 
 %% Export Trajectory Figs
-figsavepath = fullfile(rawfilesavepath,'brain_bois');
+close all
+allcontacts = [];
+for i=1:length(brains)
+    contacts = brains(i).brain.electrodes.Location;
+    allcontacts = [allcontacts; contacts];
+end
+alpha_sig = 0.05;
+agg = [[corrdat.stim_p];[corrdat.post_p]];
+both_sig = all(agg < alpha_sig, 1);
+
 freqz = [33 50 80];
 pw = [250 500];
 amp = [2 1];
 locs = unique({corrdat.stimregion});
 stimcolors = [105, 103, 253; 103 , 253, 213]/256;
-for freqI=1:3
-    for pwI=1:2
-        for locI =1:3
-            f =figure;
-            tcl = tiledlayout('flow');
-            ax1 = nexttile(tcl);
-            plot3DModel(ax1,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
-                "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-            
-                [ax1,~] = plotTrajectoriesWithEffect(ax1,corrdat,amp(1),pw(pwI),locs{locI},freqz(freqI), ...
-                    'post_d',brains(1).brain.electrodes.Location,stimcolors(1,:));
-                [ax1,~] = plotTrajectoriesWithEffect(ax1,corrdat,amp(2),pw(pwI),locs{locI},freqz(freqI), ...
-                    'post_d',[],stimcolors(2,:));
-            
-            ax2 = nexttile(tcl);
-            % copy res from axl to the two other axes for all views. 
-        end
+figsavepath = fullfile(rawfilesavepath,'brain_bois');
+zoomFactor = 1.5;
+for locI=1:length(locs)    
+    for pwI=length(pw)
+        f = figure('Position',[0 0 960 540],'Visible','off');
+        tcl = tiledlayout('flow','TileSpacing','none','Padding','tight');
+        title_str = sprintf('%d Hz-%s.png',pw(pwI),locs{locI});
+        title(tcl,title_str)
+        % 1st amp coronal
+        ax1 = nexttile(tcl);
+        plot3DModel(ax1,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+        [ax1,~] = plotTrajectoriesWithEffect(ax1,corrdat,amp(1),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(1,:),0.75, both_sig);
+        view(180,0)
+        zoom(zoomFactor)
+        % 1st amp, Angled
+        ax3 = nexttile(tcl);
+        plot3DModel(ax3,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+        [ax3,~] = plotTrajectoriesWithEffect(ax3,corrdat,amp(1),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(1,:),0.75, both_sig);
+        view(-135,45)
+        zoom(zoomFactor)
+
+        % 2nd amp, coronal
+        ax2 = nexttile(tcl);
+        plot3DModel(ax2,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+        [ax2,~] = plotTrajectoriesWithEffect(ax2,corrdat,amp(2),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(2,:),0.75, both_sig);
+        view(180,0)
+        zoom(zoomFactor)
+
+        % 2st amp, Angled
+        ax4 = nexttile(tcl);
+        plot3DModel(ax4,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+        [ax4,~] = plotTrajectoriesWithEffect(ax4,corrdat,amp(2),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(2,:),0.75, both_sig);
+        view(-135,45)
+        zoom(zoomFactor)
+        saveas(gcf,fullfile(figsavepath,title_str))
     end
 end
 
@@ -670,7 +697,11 @@ function [ax,num] = plotTrajectoriesWithEffect(ax,data,amp,pw,loc,freq,effectNam
 if ~isempty(sigloc)
     data = data(sigloc);
 end
+if ~isempty(freq)
 freqloc = ismember([data.freq],freq);
+else
+freqloc = ones(length([data.freq]));    
+end
 amploc = ismember([data.current],amp);
 pwloc = ismember([data.pw],pw);
 locloc = ismember({data.stimregion},loc);
