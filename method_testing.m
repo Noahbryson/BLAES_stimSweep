@@ -61,19 +61,36 @@ plot(mean(data(chan).pre_stim_post),'Color',[1 0 0])
 
 %% Visually Explore Data
 close all
-dark = 1;
+dark = 0;
 channels = unique([data.channel_idx]);
 channel = channels(3);
 datIdx = ismember([data.channel_idx],channel);
+lab =  unique({data(datIdx).region});
 % datIdx = 2471;
 % fig5=plot_theta(data(datIdx),fs,1);
-% fig1=plot_channel(data(datIdx),fs,0,0);
+
+% saveas(gcf,fullfile(rawfilesavepath,'ephys',sprintf('%s_example_phys.svg',lab{1})))
+plot_channel(data(datIdx),fs,1,dark);
+channel = channels(4);
+datIdx = ismember([data.channel_idx],channel);
+
+plot_channel(data(datIdx),fs,1,dark);
+channel = channels(5);
+datIdx = ismember([data.channel_idx],channel);
+
+
+plot_channel(data(datIdx),fs,1,dark);
 % fig2=plot_PSD(data(datIdx),fs,0,1);
-% figTaper=plot_PSD(data(datIdx),fs,0,1);
+% saveas(gcf,fullfile(rawfilesavepath,'ephys',sprintf('%s_example_PSDs.svg',lab{1})))
+
+% fig3=plot_PSD(data(datIdx),fs,0,0);
+% saveas(gcf,fullfile(rawfilesavepath,'ephys',sprintf('%s_example_Gain.svg',lab{1})))
+
+% figTaper=plot_PSD(data(datIdx),fs,1,1);
 % figGam = plot_gamma(data(datIdx),fs,1);
 
 % fig3=plot_time_frequency(data(datIdx),fs,'FFT');
-fig4=plot_correlation(data(datIdx));
+% fig4=plot_correlation(data(datIdx));
 
 %%
 function fig=plot_theta(data,fs,dark)
@@ -139,6 +156,8 @@ function fig=plot_channel(data,fs,showCorrelation,dark)
 rows = ceil(sqrt(length(data)));
 cols = ceil(length(data)/rows);
 chan = unique({data.channel});
+loc = unique({data.region});
+
 figName = strcat(chan,' raw');
 fig=figure('Name',figName{1},'Visible','on');
 set(fig,'Position',[100 100 1980 1020])
@@ -160,15 +179,31 @@ for i=1:length(data)
         title(data(i).label)
     end
     t = linspace(0,size(y,2)/fs,size(y,2));
-    hold on
     lim = max(abs(y(:)));
+    hold on
     if dark
     plot(ax,t,y','Color',[1 1 1 0.25]);
     else
     plot(ax,t,y','Color',[0 0 0 0.25]);
     end
-    plot(ax,t,mean(y),'Color',[1 0 0],'LineWidth',1.5,'LineStyle','--')
+    plot(ax,t,mean(y),'Color',[1 0 0],'LineWidth',1.5,'LineStyle','-')
     ylim([-lim lim])
+    hold off
+    % 
+    if ismember(i,[2 5 15 18 23])
+    figure('Visible','off')
+    ax = gca;
+    hold on
+    plot(ax,t,y','Color',[0 0 0 0.25]);
+    plot(ax,t,mean(y),'Color',[1 0 0],'LineWidth',1.5,'LineStyle','-')
+    ylim([-600 600])
+    xlabel(sprintf('%s %d',loc{1},i),'FontSize',30)
+    fname = fullfile('/Users/nkb/Library/CloudStorage/Box-Box/Brunner Lab/Posters/SfN2024/Raw Files','ephys',sprintf('%d_%s_phys.svg',i,loc{1}));
+    title(tit)
+    hold off
+    saveas(gcf,fname,'svg')
+    end
+
 end
 
 linkaxes(tcl.Children,'x');
@@ -300,7 +335,7 @@ for i=1:length(data)
     end
     % Pxx = 20*log(Pxx);
     if ratio
-        semilogx(f,Pxx./Pxx_pre,'Color',[0 0 1])
+        semilogx(f,20*log(Pxx./Pxx_pre),'Color',[0 0 1])
         hold on
     else
         loglog(f,Pxx,'Color',[0 0 1])
@@ -320,7 +355,7 @@ for i=1:length(data)
     end
     % Pxx = 20*log(Pxx);
     if ratio
-        semilogx(f,Pxx./Pxx_pre,'Color',[1 0 0])
+        semilogx(f,20*log(Pxx./Pxx_pre),'Color',[1 0 0])
     else
         loglog(f,Pxx,'Color',[1 0 0])
     end
@@ -338,7 +373,7 @@ for i=1:length(data)
         [Pxx,f] = pwelch(y,g,L,frequencies,fs);
     end    % Pxx = 20*log(Pxx);
     if ratio
-        semilogx(f,Pxx./Pxx_pre,'Color',[1 0 1 0.7])
+        semilogx(f,20*log(Pxx./Pxx_pre),'Color',[1 0 1 0.7])
     else
         loglog(f,Pxx,'Color',[1 0 1 0.7])
     end
@@ -346,9 +381,11 @@ for i=1:length(data)
     tit = sprintf("%s\n %.3f %s",data(i).label,data(i).charge,data(i).chargeUnits);
     title(tit)
     ax.XScale = 'log';
+    if ~ratio
     ax.YScale = 'log';
+    end
 end
-linkaxes(tcl.Children,'x');
+linkaxes(tcl.Children,'xy');
 hL = legend(leg);
 fontsize(hL,20,'points')
 hL.Layout.Tile='East';

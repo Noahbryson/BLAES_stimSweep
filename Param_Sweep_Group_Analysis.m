@@ -276,18 +276,19 @@ sideIdx = ismember({corrdat.rec_side},'ipsi');
 sideIdx = sideIdx(both_sig);
 stim_d_s = stim_d(both_sig);
 post_d_s = post_d(both_sig);
-figure('Name','Ipsi v Contra All Responses')
+% sideIdx = ismember({corrdat.rec_side},'ipsi');
+% stim_d_s = stim_d;
+% post_d_s = post_d;
+tcl =tiledlayout(1,2);
+% figure('Name','Ipsi v Contra All Responses')
+ax=nexttile(tcl);
 hold on
 scatter(stim_d_s(sideIdx),post_d_s(sideIdx),20,'blue')
-title('All Significant Responses Ipsilateral to Stim Site')
-xlabel('Stim vs Baseline (d)')
-ylabel('Post-stim vs Baseline (d)')
+title('All Significant Responses')
 [rho2,pval2] = corr(stim_d_s(sideIdx)',post_d_s(sideIdx)',"Type","Spearman");
 result = sprintf("ipsi R = %.4f\np = %.4f",rho2,pval2);
 xlim([0 1])
 text(0.3,1.7,result)
-
-title('All Significant Responses Contralateral to Stim Site')
 xlabel('Stim vs Baseline (d)')
 ylabel('Post-stim vs Baseline (d)')
 scatter(stim_d_s(~sideIdx),post_d_s(~sideIdx),20,'red')
@@ -297,10 +298,10 @@ text(0.3,1.20,result)
 xlim([0 1])
 ylim([-.20 2.00])
 legend({'ipsi' 'contra'})
-saveas(gcf,fullfile(rawfilesavepath,'ipsi_vs_contra_corr.svg'))
+% saveas(gcf,fullfile(rawfilesavepath,'ipsi_vs_contra_corr.svg'))
 hold off
 
-figure
+ax=nexttile(tcl);
 ipsi_l = ones(length(post_d_s(sideIdx)),1);
 contra_l = 2*ones(length(post_d_s(~sideIdx)),1);
 ipsi = post_d_s(sideIdx);
@@ -308,16 +309,19 @@ hold on
 boxchart(ipsi_l,ipsi)
 scatter(ipsi_l,ipsi);
 scatter(1,median(ipsi), 300)
+[fi, fxi] = kde(ipsi);
+plot(fi,fxi)
 contra = post_d_s(~sideIdx);
 boxchart(contra_l,contra)
 scatter(contra_l,contra);
+[fc, fxc] = kde(contra);
 scatter(2,median(contra), 300)
-legend({'' 'ipsi' '' '' 'contra' ''})
-ylim([-.1 1.1])
-xlim([0 3])
+plot(fc,fxc)
+legend({'' 'ipsi' '' 'ipsi kde' '' 'contra' '' 'contra kde'})
 ipsi_p = ranksum(ipsi_l,contra_l);
 ipsi_d = mean(ipsi) - mean(contra);
 text(1.5, 0.5, sprintf('d=%.4f\np=%.6f',ipsi_d,ipsi_p))
+linkaxes(tcl.Children,'y')
 saveas(gcf,fullfile(rawfilesavepath,'ipsi_vs_contra_dists.svg'))
 %% post-stim vs gamma
 stim_d = [corrdat.post_d];
