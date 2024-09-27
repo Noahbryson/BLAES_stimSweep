@@ -191,8 +191,22 @@ for j=1:length(corrdat)
     corrdat(j).stim_p = corrdat(j).stim_p * numCompares;
 
 end
-%% Check paired Stats
-
+%% Get Stimulation Parameter Descriptions for Each Subject
+param_space = struct;
+pwLoc = ismember([corrdat.pw],500);
+stimLoc = ismember([corrdat.current],2);
+aggloc = [pwLoc; stimLoc];
+maxIdx = all(aggloc==1,1);
+for s=1:length(subjects)
+ss = subjects{s};
+loc = ismember({corrdat.subject},ss);
+param_space(s).subject = ss;
+param_space(s).pw = unique([corrdat(loc).pw]);
+param_space(s).region = cell2mat(unique({corrdat(loc).stimregion}));
+param_space(s).amp = unique([corrdat(loc).current]);
+param_space(s).freq = unique([corrdat(loc).freq]);
+param_space(s).max_cond = logical(sum(maxIdx(loc))); 
+end
 
 %% Plot All Trajectories
 fname ='Top Axial View';
@@ -632,7 +646,41 @@ plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.A
     "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
 plotTrajectoriesWithEffect(ax,corrdat,1,250,locs{1},freqz,'post_d',allcontacts,stimcolors(2,:),1.5,both_sig);
 view(180,0)
+%% Example Glassbrains for BJH050
+close all
+subject = 'BJH050';
+subjectLoc  = ismember({corrdat.subject},subject);
+bjh050 = corrdat(subjectLoc);
+ipsiLocations = ismember({bjh050.rec_side},'ipsi');
+alpha_sig = 0.05;
+agg = [[bjh050.stim_p];[bjh050.post_p]];
+both_sig = all(agg < alpha_sig, 1);
 
+ff = figure('Position',[0 0 1920 1080],'Visible','on');
+tcl = tiledlayout('flow','TileSpacing','none','Padding','tight');
+ax=nexttile(tcl);
+plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
+    "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+plotTrajectoriesWithEffect(ax,bjh050,1,250,'Basal-amyg',33,'post_d',brains(1).brain.electrodes.Location,stimcolors, .75,both_sig,ipsiLocations);
+view(180,0)
+ax=nexttile(tcl);
+plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
+    "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+plotTrajectoriesWithEffect(ax,bjh050,1,250,'Basal-amyg',33,'post_d',brains(1).brain.electrodes.Location,stimcolors, .75,both_sig,ipsiLocations);
+view(-135,45)
+
+ax=nexttile(tcl);
+summer = 0;
+plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
+    "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+plotTrajectoriesWithEffect(ax,bjh050,2,500,'Basal-Lateral-amyg',80,'post_d',brains(1).brain.electrodes.Location,stimcolors,.75,both_sig,ipsiLocations);
+view(180,0)
+
+ax=nexttile(tcl);
+plot3DModel(ax,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation, ...
+    "FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
+plotTrajectoriesWithEffect(ax,bjh050,2,500,'Basal-Lateral-amyg',80,'post_d',brains(1).brain.electrodes.Location,stimcolors,.75,both_sig,ipsiLocations);
+view(-135,45)
 %% Export Trajectory Figs
 close all
 allcontacts = [];
@@ -640,6 +688,7 @@ for i=1:length(brains)
     contacts = brains(i).brain.electrodes.Location;
     allcontacts = [allcontacts; contacts];
 end
+ipsiLocations = ismember({corrdat.rec_side},'ipsi');
 alpha_sig = 0.05;
 agg = [[corrdat.stim_p];[corrdat.post_p]];
 both_sig = all(agg < alpha_sig, 1);
@@ -650,40 +699,41 @@ amp = [2 1];
 locs = unique({corrdat.stimregion});
 stimcolors = [105, 103, 253; 103 , 253, 213]/256;
 figsavepath = fullfile(rawfilesavepath,'brain_bois');
-zoomFactor = 1.5;
+zoomFactor = 1;
 for locI=1:length(locs)    
-    for pwI=length(pw)
-        f = figure('Position',[0 0 960 540],'Visible','off');
+    for pwI=1:length(pw)
+        f = figure('Position',[0 0 1920 1080],'Visible','off');
         tcl = tiledlayout('flow','TileSpacing','none','Padding','tight');
-        title_str = sprintf('%d Hz-%s.png',pw(pwI),locs{locI});
+        title_str = sprintf('%d us-%s.png',pw(pwI),locs{locI});
         title(tcl,title_str)
         % 1st amp coronal
         ax1 = nexttile(tcl);
         plot3DModel(ax1,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-        [ax1,~] = plotTrajectoriesWithEffect(ax1,corrdat,amp(1),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(1,:),0.75, both_sig);
+        [ax1,~] = plotTrajectoriesWithEffect(ax1,corrdat,amp(1),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors,0.75, both_sig, ipsiLocations);
         view(180,0)
         zoom(zoomFactor)
         % 1st amp, Angled
         ax3 = nexttile(tcl);
         plot3DModel(ax3,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-        [ax3,~] = plotTrajectoriesWithEffect(ax3,corrdat,amp(1),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(1,:),0.75, both_sig);
+        [ax3,~] = plotTrajectoriesWithEffect(ax3,corrdat,amp(1),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors,0.75, both_sig, ipsiLocations);
         view(-135,45)
         zoom(zoomFactor)
 
         % 2nd amp, coronal
         ax2 = nexttile(tcl);
         plot3DModel(ax2,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-        [ax2,~] = plotTrajectoriesWithEffect(ax2,corrdat,amp(2),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(2,:),0.75, both_sig);
+        [ax2,~] = plotTrajectoriesWithEffect(ax2,corrdat,amp(2),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors,0.75, both_sig, ipsiLocations);
         view(180,0)
         zoom(zoomFactor)
 
         % 2st amp, Angled
         ax4 = nexttile(tcl);
         plot3DModel(ax4,brains(1).brain.surfaceModel.Model,brains(1).brain.surfaceModel.Annotation,"FaceColor",[255,255,255]/255,"FaceAlpha",0.05);
-        [ax4,~] = plotTrajectoriesWithEffect(ax4,corrdat,amp(2),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors(2,:),0.75, both_sig);
+        [ax4,~] = plotTrajectoriesWithEffect(ax4,corrdat,amp(2),pw(pwI),locs{locI},[],'post_d',allcontacts,stimcolors,0.75, both_sig, ipsiLocations);
         view(-135,45)
         zoom(zoomFactor)
-        saveas(gcf,fullfile(figsavepath,title_str))
+        saveas(f,fullfile(figsavepath,title_str))
+        close(f)
     end
 end
 
@@ -693,9 +743,10 @@ end
 
 
 %%
-function [ax,num] = plotTrajectoriesWithEffect(ax,data,amp,pw,loc,freq,effectName,allElectrodes,basecolor,minsize,sigloc)
+function [ax,num] = plotTrajectoriesWithEffect(ax,data,amp,pw,loc,freq,effectName,allElectrodes,basecolors,minsize,sigloc,ipsiloc)
 if ~isempty(sigloc)
     data = data(sigloc);
+    ipsiloc = ipsiloc(sigloc);
 end
 if ~isempty(freq)
 freqloc = ismember([data.freq],freq);
@@ -716,7 +767,12 @@ if ~isempty(allElectrodes)
     plotBallsOnVolume(ax,allElectrodes,[0 0 0],minsize/2,'FaceAlpha',1);
 end
 for i=1:num
-    c = basecolor;
+    ipsiFlag = ipsiloc(ref(i));
+    if ipsiFlag
+    c = basecolors(1,:);
+    else
+    c = basecolors(2,:);
+    end
     r = minsize + 5 * effect(i) / max(abs(effect));
     plotBallsOnVolume(ax,positions{i},c,r,'FaceAlpha',1);
     
@@ -864,6 +920,8 @@ function out = checkIpsiShank(shank, stimSide)
     out = cell(size(shank));
     out(isIpsi) = {'ipsi'};
     out(~isIpsi) = {'contra'};
+    % test = {stimSide{:};out{:};sides{:};shank{:}};
+    % test = test';
 end
 
 function out = identifyStimRegion(anode,cathode)
