@@ -65,7 +65,7 @@ trajplot(local_dat,0,dir,fs,colors)
 %% Single Channel
 % close all
 fig = figure(1);
-chan = 1;
+chan = 126;
 channel_name = brain.electrodeNames{chan};
 local_data = theta_epochs(strcmp({theta_epochs.channel},channel_name));
 tcl = tiledlayout(4,6);
@@ -76,7 +76,7 @@ for i=1:length(local_data)
 
     vals = local_data(i).avg;
     stdev = local_data(i).std;
-    t = linspace(0,local_data(i).timeOffset+(length(vals)/fs),length(vals));
+    t = linspace(-local_data(i).timeOffset,local_data(i).timeOffset+(length(vals)/fs/2),length(vals));
     hold on
     plot(ax,t,vals,'Color',[1 0 0]);
     plot(ax,t,local_data(i).signals','Color',[0,0,0 0.001])
@@ -87,7 +87,8 @@ end
 
 hold off
 linkaxes(tcl.Children,'x');
-sgtitle(channel_name,'Interpreter','none');
+sgtitle(theta_epochs(chan).channel,'Interpreter','none');
+clear local_data
 %% Each condition per trajectory
 close all
 saveFigs = 0;
@@ -137,7 +138,7 @@ for i=1:length(intervals)
     trig(i).pw = str2double(vals{5});
     trig(i).f = str2double(vals{7});
     trig(i).n_pulse = str2double(vals{2});
-    peak_dist = floor(fs/trig(i).f) -1;
+    peak_dist = (fs / trig(i).f)*0.8;
     num_peaks = base_frequency*stimDuration*trig(i).n_pulse;
     peaks = struct();
     for j=1:length(onsets)
@@ -146,7 +147,7 @@ for i=1:length(intervals)
         % pulses. 
         d = trigger(onsets(j):offsets(j)+sampleOffset);
         temp(j,:) = d;
-        thresh = 1.5*std(abs(d));
+        thresh = 2*std(abs(d));
         [pk,pkLoc] = findpeaks(abs(d(100:end)),'MinPeakHeight',thresh,'MinPeakDistance',peak_dist);
         pkLoc = pkLoc+100;
         annotate = 0;
@@ -199,40 +200,32 @@ stimCodes = [stimMap.Code];
 idx = 1;
 triggerCodes = [triggerEpochs.code];
 
-for chan=1:num_channels
+for k=1:num_channels
     % x = struct();
-    for interval_idx=1:length(intervals)
-        onsets = intervals(interval_idx).start;
-        offsets = intervals(interval_idx).stop;
+    for i=1:length(intervals)
+        onsets = intervals(i).start;
+        offsets = intervals(i).stop;
         len = mean(offsets -onsets) + sampleOffset;
-        signal_holder = zeros(length(onsets),len+1);
-        raw_sig_holder = zeros(length(onsets),len+1);
-        % state = zeros(length(onsets),len+1);
-        x(idx).code = intervals(interval_idx).code;
-        stimloc = triggerEpochs(ismember(triggerCodes,intervals(interval_idx).code));
-        for trial_num=1:length(onsets)
-            peakset = stimloc.peaks(trial_num).n;
-            d = signals(onsets(trial_num):offsets(trial_num)+sampleOffset,chan);
+        temp = zeros(length(onsets),len+1);
+        state = zeros(length(onsets),len+1);
+        x(idx).code = intervals(i).code;
+        stimloc = triggerEpochs(ismember(triggerCodes,intervals(i).code));
+        for j=1:length(onsets)
+            peakset = stimloc.peaks(j).n;
+            d = signals(onsets(j):offsets(j)+sampleOffset,k);
             d = getHighPassData(d,0.5,2,fs);
-            e = interpolateSpikes(d,peakset,stimloc.signal(trial_num,:));
-            % figure(1)
-            % plot(d,'LineWidth',4)
-            % hold on
-            % plot(e,'LineWidth',2)
-            % hold off
-            raw_sig_holder(trial_num,:) = d;
-            signal_holder(trial_num,:) = e;
-            % state(trial_num,:) = stimulation_state(onsets(trial_num):offsets(trial_num)+sampleOffset);
+            d = interpolateSpikes(d,peakset,stimloc.signal(j,:));
+            temp(j,:) = d;
+            state(j,:) = stimulation_state(onsets(j):offsets(j)+sampleOffset);
         end
-        label_loc = find(stimCodes == intervals(interval_idx).code);
+        label_loc = find(stimCodes == intervals(i).code);
         label_loc = label_loc(1);
         x(idx).label = makeLabelFromCereConfig(stimMap(label_loc).Config,stimMap(label_loc).Electrode);
         x(idx).timeOffset = timeoffset;
-        x(idx).signals = signal_holder; % trials x samples
-        x(idx).raw_sig = raw_sig_holder;
-        % x(idx).stim_state = state;
-        x(idx).avg = mean(signal_holder,1);
-        x(idx).std = std(signal_holder,1);
+        x(idx).signals = temp; % trials x samples
+        x(idx).stim_state = state;
+        x(idx).avg = mean(temp,1);
+        x(idx).std = std(temp,1);
         vals = [stimMap(label_loc).Config.Config];
         ma = str2double(vals{3})/1000;
         pw = str2double(vals{5});
@@ -242,7 +235,7 @@ for chan=1:num_channels
         x(idx).pw = pw;
         x(idx).freq=f;
         x(idx).loc = stimMap(label_loc).Electrode;
-        x(idx).channel = chan_lab{chan};
+        x(idx).channel = chan_lab{k};
         electrodeSA = 5*0.01; % cm^2
         stimDur = 1; %s
         x(idx).charge = pw*ma*1000*n_pulse*f*stimDur/electrodeSA *1e-6;
@@ -250,16 +243,17 @@ for chan=1:num_channels
         x(idx).chargeUnits = "uC/cm^2";
         % charge = us * uA * numPulses * Hz * s/cm^2 = pC/cm^2 -> pC/cm^2 * 1e-6 = uC/cm^2
         % charge/phase = us * uA/cm^2= pC/cm^2-> pC/cm^2 *1e-6 = uC/cm^2
-        if ~isempty(strfind(chan_lab{chan},"'"))
-        traj = sprintf('%s_L',chan_lab{chan}(1));
+        if ~isempty(strfind(chan_lab{k},"'"))
+        traj = sprintf('%s_L',chan_lab{k}(1));
         else
-            traj = sprintf('%s_R',chan_lab{chan}(1));
+            traj = sprintf('%s_R',chan_lab{k}(1));
         end
         x(idx).shank = traj;
-        [snr,~]= getSNR(signal_holder,8,fs,8);
+        bin_length = 200; % ms
+        [snr,~]= getSNR(temp,8,fs);
         x(idx).snr = snr;
         x(idx).snr_av = mean(snr);
-        x(idx).channel_idx = chan;
+        x(idx).windowlen = sprintf("%.0f ms",bin_length);
         idx = idx+1;
     end
     % x(k).epoch = x;

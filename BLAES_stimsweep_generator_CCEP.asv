@@ -75,8 +75,8 @@
 %   since the pseduorandomization uses recursive methods to ensure rules
 %   about amplitude and channels are not violated. 
                                     
-BCI2KPath = 'C:\BCI2000.x64'; % Set the path of the BCI2000 main directory here, need this to write params
-addpath(genpath('C:\Users\Peter\Documents\MATLAB\BLAES_stimSweep'));% noah windows path 'C:\BCI2000\BCI2000'
+BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools'; % Set the path of the BCI2000 main directory here, need this to write params
+% noah windows path 'C:\BCI2000\BCI2000'
 % noah mac path: '/Users/nkb/Documents/BCI2000tools'
 % utah path
 % bigcart path
@@ -591,7 +591,7 @@ for loc=1:size(trial_seq,1)
     
 end
 param.Sequence.Value{end+1,1} = sprintf('%d',endRun_stimcode); % end
-
+fprintf('\n%f exp time %f vid duration, %u loops',experimentTime,vid_duration,numResets)
 
 % Write Trial Sweep Parm
 fname = sprintf('BLAES_stimsweep_run_%s.prm',parmName_dec);
@@ -604,8 +604,7 @@ for loc=1:length(parameter_lines)
     fprintf( fid, '\r\n' );
 end
 fclose(fid);
-fprintf('\nwrote %s to %s', fname,parmDir);
-fprintf('\n%.1f exp time %.1f vid duration, %u loops\n',experimentTime,vid_duration,numResets)
+fprintf('\nwrote %s to %s\n', fname,parmDir);
 end
 %%
 %
