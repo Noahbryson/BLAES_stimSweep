@@ -7,23 +7,23 @@ else
     boxpath =  fullfile(user,'Library/CloudStorage/Box-Box/Brunner Lab'); % Path to data
     BCI2KPath = '/Users/nkb/Documents/NCAN/BCI2000tools';
 end
-datapath = fullfile(boxpath,"/DATA/BLAES/BLAES_param");
+rootDataPath = fullfile(boxpath,"/DATA/BLAES/BLAES_param");
 addpath(genpath(fullfile(user,'Documents/NCAN/code/BLAES_stimSweep')));
 addpath(genpath(fullfile(user,'Documents/NCAN/code/MATLAB_tools')));
 bci2ktools(BCI2KPath);
 %%
-all_subject_info = readtable(fullfile(datapath,'Subject_Locations.xlsx'));
-for subIdx = 2:height(all_subject_info)
+all_subject_info = readtable(fullfile(rootDataPath,'Subject_Locations.xlsx'));
+% for subIdx = 2:height(all_subject_info)
 % UtahSubs = {'UIC202407' 'UIC202412' 'UIC202414'};
 % BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
 % for subIdx=1:length(BJHSubs)
 % subIdx = 2;
 % Subject = 'BJH050';
-Subject = all_subject_info.Subject{subIdx};
+Subject = all_subject_info.Subject{end};
 % Subject = BJHSubs{subIdx};
 %%
 disp(Subject)
-groupPath = fullfile(datapath,'group');
+groupPath = fullfile(rootDataPath,'group');
 sections = 0;
 subject_info = table2struct(all_subject_info(strcmp(all_subject_info.Subject, Subject),:));
 stim_info = struct();
@@ -31,14 +31,14 @@ stim_info(1).pair = subject_info.Pair1;
 stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
 subject_info.Triggers = strsplit(subject_info.Triggers,',');
     
-mainfigDir = fullfile(datapath,Subject,"figures");
+mainfigDir = fullfile(rootDataPath,Subject,"figures");
 if ~exist(mainfigDir,'dir')
     [~,~]=mkdir(mainfigDir);
 end
 run = 1;
 
 load('colors.mat');
-dataPath = dir(sprintf("%s/%s/*.dat",datapath,Subject));
+dataPath = dir(sprintf("%s/%s/*.dat",rootDataPath,Subject));
 [signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name),'-calibrated');
 % [signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name));
 states = parseStates(states);
@@ -55,12 +55,12 @@ preprocessFlag = 0;
 % Downsampling and Channel Idenficiation
 if ~preprocessFlag
     % [states,signals,fs] = downsample_seeg(signals,states,fs,500);
-    if exist(fullfile(datapath,Subject,sprintf("%s_MNI_new.mat",Subject)),'file')
+    if exist(fullfile(rootDataPath,Subject,sprintf("%s_MNI_new.mat",Subject)),'file')
         disp('Found new VERA Struct')
-        brain = load(fullfile(datapath,Subject,sprintf("%s_MNI_new.mat",Subject)));
+        brain = load(fullfile(rootDataPath,Subject,sprintf("%s_MNI_new.mat",Subject)));
         channelKey = brain.electrodeNamesKey;
         if isempty(channelKey)
-        ChannelMap = load(fullfile(datapath,Subject,"ChannelMap.mat"));
+        ChannelMap = load(fullfile(rootDataPath,Subject,"ChannelMap.mat"));
         channelLocs = cellfun(@ischar,ChannelMap.ElecTypeProj);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
         [dat_channelNames,electrodeNames,channelNameLoc,veraLoc] = indexChannelNames(dat_channelNames,brain.electrodes.Name);
@@ -87,20 +87,20 @@ if ~preprocessFlag
         
         
 
-    elseif exist(fullfile(datapath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
+    elseif exist(fullfile(rootDataPath,Subject,sprintf("%s_VERA_idx.mat",Subject)),'file')
         disp('Found VERA INDEX')
-        brain=load(fullfile(datapath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
-        load(fullfile(datapath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
+        brain=load(fullfile(rootDataPath,Subject,sprintf("%s_MNI.mat",Subject))); % MNI Brain
+        load(fullfile(rootDataPath,Subject,sprintf("%s_VERA_idx.mat",Subject))); %VERA_idx
         channelLocs = find(~isnan(VERA_idx));
         signals = signals(:,channelLocs);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
         electrodeNames = brain.electrodeNames;
         regions = brain.SecondaryLabel;
         regions = cellfun(@(x) x{1},regions,'UniformOutput',false);
-    elseif exist(fullfile(datapath,Subject,"ChannelMap.mat"),'file')
+    elseif exist(fullfile(rootDataPath,Subject,"ChannelMap.mat"),'file')
         disp('Found Channel Map')
 
-        ChannelMap = load(fullfile(datapath,Subject,"ChannelMap.mat"));
+        ChannelMap = load(fullfile(rootDataPath,Subject,"ChannelMap.mat"));
         channelLocs = cellfun(@ischar,ChannelMap.ElecTypeProj);
         signals = signals(:,channelLocs);
         dat_channelNames = params.ChannelNames.Value(channelLocs);
@@ -139,10 +139,12 @@ fprintf('\ndone preprocessing\n')
 %% Epoching
 tic;
 theta_epochs = theta_burst_epoch(signals,electrodeNames,intervals,timing_adjust,fs,stimMap,pulseLocs,regions,UtahFlag);
-
 disp(toc)
 
-
+%%
+epoch_outPath = fullfile(dataPath.folder,"theta_epochs.mat");
+save(epoch_outPath,'theta_epochs','fs','Subject','colors','subject_info','stimMap','-v7.3')
+fprintf('exported epoch struct')
 
 %%
 theta_band = [4 10]; % Hz
@@ -196,7 +198,8 @@ end
 savepath = fullfile(groupPath,sprintf('%s_cohens.mat',Subject));
 save(savepath,"outstruct");
 fprintf('\n coherence analyzed\n')
-end
+
+% end
 %% Fix Current Base Frequency
 if sections
 local_dat = stimchannel_epochs(1).entry([stimchannel_epochs(1).entry.current]==1);
@@ -247,7 +250,7 @@ if sections
 channels = [22 100 41 5 131];
 exp_idx = ismember([theta_epochs.channel_idx],channels);
 exportStruct = theta_epochs(exp_idx);
-exportPath = fullfile(datapath,'method_building');
+exportPath = fullfile(rootDataPath,'method_building');
 save(fullfile(exportPath,'selected_data.mat'),"exportStruct");
 save(fullfile(exportPath,'fs.mat'),'fs');
 end
@@ -418,7 +421,7 @@ for idx=1:total_combos
         onsets = intervals(interval_idx).start+timing_adjust_samps;
         offsets = intervals(interval_idx).stop+timing_adjust_samps;
         len = mean(offsets -onsets);
-        all_holder = zeros(length(onsets),3*(len+1));
+        raw_holder = zeros(length(onsets),3*(len+1));
         baseline_holder = zeros(length(onsets),len+1);
         signal_holder = zeros(length(onsets),len+1);
         post_sig_holder = zeros(length(onsets),len+1);
@@ -433,26 +436,37 @@ for idx=1:total_combos
             peakset = stimloc.peaks(trial_num).n;
             slice = signals(-len-1+onsets(trial_num):offsets(trial_num)+len+1,chan);
             slice_hp = getHighPassData(slice,2,4,fs);
-            all_holder(trial_num,:) = slice_hp;
-            d = signals(onsets(trial_num):offsets(trial_num),chan);
+            
+
+            d = slice_hp(onsets(trial_num):offsets(trial_num),chan);
             baseline_window = [onsets(trial_num)-1-len,onsets(trial_num)-1];
-            d = getHighPassData(d,2,4,fs);
-            b = signals(baseline_window(1):baseline_window(2),chan);
-            baseline = getHighPassData(b,2,4,fs);
-            % e = interpolateSpikes(d,peakset,stimloc.peaks(trial_num).stim_array,fs,10,stimloc.peaks(trial_num).expected);
-            e = interp_artifact(d,stimloc.peaks(trial_num).stim_array,fs,10);
+            
+            
+
+            baseline_signal = slice_hp(baseline_window(1):baseline_window(2));
+
+            denoised_stim_signal = interp_artifact(d,stimloc.peaks(trial_num).stim_array,fs,10);
+            
+            post_stim_signal = slice_hp(floor(2*fs)+1:end);
             % plot(ax,d)
             % hold on
             % plot(ax,e)
             % hold off
-            br = baseline - baseline(end);
-            sr = e - br(end);
-            pr = slice_hp(floor(2*fs)+1:end) - slice_hp(floor(2*fs)+1);
-            agg_denoised = [br; sr; pr];
-       
-            post_sig_holder(trial_num,:) = pr;
-            signal_holder(trial_num,:) = e;
-            baseline_holder(trial_num,:) = baseline;
+
+            % br = baseline - baseline(end);
+            % sr = e - br(end);
+            % pr = slice_hp(floor(2*fs)+1:end) - slice_hp(floor(2*fs)+1);
+            br = baseline_signal;
+            sr = denoised_stim_signal;
+            pr = post_stim_signal;   
+            % agg_denoised = [br; sr; pr];
+            agg_denoised = slice_hp(:,chan);
+            agg_denoised(onsets(trial_num):offsets(trial_num)) = denoised_stim_signal;
+            
+            raw_holder(trial_num,:) = slice_hp;
+            baseline_holder(trial_num,:) = baseline_signal;
+            signal_holder(trial_num,:) = denoised_stim_signal;
+            post_sig_holder(trial_num,:) = post_stim_signal;
             recombined_holder(trial_num,:) = agg_denoised;
             % state(trial_num,:) = stimulation_state(onsets(trial_num):offsets(trial_num));
         end
@@ -465,7 +479,7 @@ for idx=1:total_combos
         x(idx).signals = signal_holder; % trials x samples
         x(idx).post_stim = post_sig_holder;
         x(idx).baseline = baseline_holder;
-        x(idx).pre_stim_post = all_holder;
+        x(idx).pre_stim_post = raw_holder;
         x(idx).full_trial = recombined_holder;
         % x(idx).stim_state = state;
         % [~,psd_stim] = matrix_PSD(signal_holder',frequencies,fs);
