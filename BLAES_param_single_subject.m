@@ -13,13 +13,13 @@ addpath(genpath(fullfile(user,'Documents/NCAN/code/MATLAB_tools')));
 bci2ktools(BCI2KPath);
 %%
 all_subject_info = readtable(fullfile(datapath,'Subject_Locations.xlsx'));
-% for subIdx = 2:height(all_subject_info)
+for subIdx = 2:height(all_subject_info)
 % UtahSubs = {'UIC202407' 'UIC202412' 'UIC202414'};
 % BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
 % for subIdx=1:length(BJHSubs)
 % subIdx = 2;
-Subject = 'BJH050';
-% Subject = all_subject_info.Subject{subIdx};
+% Subject = 'BJH050';
+Subject = all_subject_info.Subject{subIdx};
 % Subject = BJHSubs{subIdx};
 %%
 disp(Subject)
@@ -40,6 +40,7 @@ run = 1;
 load('colors.mat');
 dataPath = dir(sprintf("%s/%s/*.dat",datapath,Subject));
 [signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name),'-calibrated');
+% [signals,states,params] = load_bcidat(sprintf('%s/%s',dataPath.folder,dataPath.name));
 states = parseStates(states);
 fs = params.SamplingRate.NumericValue;
 if contains(Subject,'UIC')
@@ -53,7 +54,7 @@ preprocessFlag = 0;
 %% Preprocessing
 % Downsampling and Channel Idenficiation
 if ~preprocessFlag
-    [states,signals,fs] = downsample_seeg(signals,states,fs,500);
+    % [states,signals,fs] = downsample_seeg(signals,states,fs,500);
     if exist(fullfile(datapath,Subject,sprintf("%s_MNI_new.mat",Subject)),'file')
         disp('Found new VERA Struct')
         brain = load(fullfile(datapath,Subject,sprintf("%s_MNI_new.mat",Subject)));
@@ -120,15 +121,29 @@ if ~preprocessFlag
     preprocessFlag = 1;
 end
 timing_adjust = 80; % ms, due to software triggered stimulation state.
-[signals,trigger,thresh] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers);
+[signals,trigger,thresh] = preprocess(signals,fs,dat_channelNames,subject_info.Triggers); 
+% Prior to downsampling, need to go ahead and run peak detection on trigger
+% channel. downsampling the stimulation pulses to 500 hz it what causes
+% some of the stim pulses to drop out from the artificial trigger. 
+%
+% [trigger2,~,~] = downsampleTseries(trigger,params.SamplingRate.NumericValue,500);
+% [states,signals,fs] = downsample_seeg(signals,states,fs,500);
+
 [epochLocs,intervals] =getAllIntervals(states.StimulusCode,stimMap);
+
+pulseLocs= triggerEpochs(trigger,stimMap,timing_adjust,intervals,fs,8,1,2*std(abs(trigger)));
+[signals,pulseLocs,intervals,states,fs] = downsample_for_epochs(signals,states,pulseLocs,intervals,fs,500);
 fprintf('\ndone preprocessing\n')
+
+
 %% Epoching
-tic
-pulseLocs= triggerEpochs(trigger,stimMap,timing_adjust,intervals,fs,8,1,thresh);
+tic;
 theta_epochs = theta_burst_epoch(signals,electrodeNames,intervals,timing_adjust,fs,stimMap,pulseLocs,regions,UtahFlag);
+
 disp(toc)
-% clear signals states
+
+
+
 %%
 theta_band = [4 10]; % Hz
 smoothing_window = 0.1; % in seconds
@@ -136,7 +151,7 @@ filterOrder = computeStableFilter(theta_band,'bandpass',fs);
 gammaFiltOrder= computeStableFilter([70,170],'bandpass',fs);
 postStimStart = floor(2*fs);
 
-parfor i=1:length(theta_epochs)
+for i=1:length(theta_epochs)
     [theta_epochs(i).theta_power,theta_epochs(i).theta_phase, theta_epochs(i).theta_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,theta_band,filterOrder, ...
         'smooth',smoothing_window,'baselineDuration',1);
     % theta_epochs(i).theta_power = zscore(theta_epochs(i).theta_power);
@@ -158,12 +173,12 @@ parfor i=1:length(theta_epochs)
 end
 fprintf('\ndone epoching\n')
 
-%% coherenence stats
+% coherenence stats
 export_labs = {'code' 'region' 'label' 'current' 'pw' 'freq' 'loc' 'channel' 'charge' 'chargePerPhase' 'chargeUnits' 'shank' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr' 'theta_change' 'gamma_change','theta_rest','theta_task','gamma_rest','gamma_task'};
 
 outstruct = struct();
 N = length(theta_epochs);
-parfor i=1:N
+for i=1:N
     for j=1:length(export_labs)
         field = export_labs{j};
         outstruct(i).(field) = theta_epochs(i).(field);
@@ -181,7 +196,7 @@ end
 savepath = fullfile(groupPath,sprintf('%s_cohens.mat',Subject));
 save(savepath,"outstruct");
 fprintf('\n coherence analyzed\n')
-% end
+end
 %% Fix Current Base Frequency
 if sections
 local_dat = stimchannel_epochs(1).entry([stimchannel_epochs(1).entry.current]==1);
@@ -284,24 +299,26 @@ for i=1:length(intervals)
     trig(i).pw = str2double(vals{5});
     trig(i).f = str2double(vals{7});
     trig(i).n_pulse = str2double(vals{2});
-    peak_dist = floor(fs/trig(i).f) -1;
+    peak_dist = floor(fs/trig(i).f*.75);
     num_peaks = base_frequency*stimDuration*trig(i).n_pulse;
+    trig(i).n_peaks = num_peaks;
+    if false % commented out old code, too afraid to delete
     % % wrote this to not repeat the loop, but preallocated loops are much
     % % faster than arrayfun
-    segments = arrayfun(@(s, e) trigger(s:e), onsets, offsets, 'UniformOutput', false);
-    segmentMatrix = vertcat(segments{:});
-    segmentMatrix = reshape(segmentMatrix, [],length(segments));
-    onsetPeaks = zeros(length(onsets),1);
-    for j=1:length(onsets) % find the median first peak of the signal to index
-        % TODO: add manual adjustment when number of peaks is off.
-        % calculate number of peaks from train duration, frequency and num
-        % pulses. 
-        d = trigger(onsets(j):offsets(j));
-        thresh = 0.5 * std(d);
-        [pk,onsetPeaks(j)] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'NPeaks',1,'MinPeakHeight',thresh);     
+    % segments = arrayfun(@(s, e) trigger(s:e), onsets, offsets, 'UniformOutput', false);
+    % segmentMatrix = vertcat(segments{:});
+    % segmentMatrix = reshape(segmentMatrix, [],length(segments));
+    % onsetPeaks = zeros(length(onsets),1);
+    % for j=1:length(onsets) % find the median first peak of the signal to index
+    %     % TODO: add manual adjustment when number of peaks is off.
+    %     % calculate number of peaks from train duration, frequency and num
+    %     % pulses. 
+    %     d = trigger(onsets(j):offsets(j));
+    %     % thresh = 0.5 * std(d);
+    %     [pk,onsetPeaks(j)] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'NPeaks',1,'MinPeakHeight',thresh);     
+    % end
+    % onsetPeak = mode(onsetPeaks);
     end
-    onsetPeak = mode(onsetPeaks);
-
     peaks = struct();
     for j=1:length(onsets)
         % TODO: add manual adjustment when number of peaks is off.
@@ -315,8 +332,10 @@ for i=1:length(intervals)
         % [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist);
         % [pk,tloc] = maxk(pk,num_peaks);
         % pkLoc = pkLoc(tloc);
-        
-        pkLoc = stim_prediction(d,fs,trig(i).f,base_frequency,num_peaks, stimDuration,onsetPeak);
+        % [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'MinPeakHeight',thresh,'NPeaks',num_peaks);     
+        [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'MinPeakHeight',thresh);     
+
+        % pkLoc = stim_prediction(d,fs,trig(i).f,base_frequency,num_peaks, stimDuration,onsetPeak);
 
         % figure
         % plot(abs(d))
@@ -327,6 +346,7 @@ for i=1:length(intervals)
         % hold off
         % pkLoc = pkLoc;
         annotate = 0;
+        peaks(j).trial = j;
         if length(pk) < num_peaks && annotate
             n = num_peaks - length(pk);
             fig=figure;
@@ -361,7 +381,13 @@ for i=1:length(intervals)
             peaks(j).n = pkLoc;
             close(fig)
         else
-            peaks(j).n = find(pkLoc ==1);
+
+            if length(pkLoc) ~= num_peaks
+                peaks(j).n = length(pkLoc);
+                peaks(j).stim_array = pkLoc;
+                peaks(j).expected = num_peaks;
+            end
+            peaks(j).n = length(pkLoc);
             peaks(j).stim_array = pkLoc;
             peaks(j).expected = num_peaks;
         end
@@ -413,7 +439,8 @@ for idx=1:total_combos
             d = getHighPassData(d,2,4,fs);
             b = signals(baseline_window(1):baseline_window(2),chan);
             baseline = getHighPassData(b,2,4,fs);
-            e = interpolateSpikes(d,peakset,stimloc.peaks(trial_num).stim_array,fs,10,stimloc.peaks(trial_num).expected);
+            % e = interpolateSpikes(d,peakset,stimloc.peaks(trial_num).stim_array,fs,10,stimloc.peaks(trial_num).expected);
+            e = interp_artifact(d,stimloc.peaks(trial_num).stim_array,fs,10);
             % plot(ax,d)
             % hold on
             % plot(ax,e)
@@ -568,17 +595,28 @@ if fs == newfs
    fprintf('Signals have been previously downsampled to %.1f',newfs)
    fs_out = fs;
 else
-ratio = round(fs/newfs,0);
-fs_out = fs/ratio;
-signals = signals(1:ratio:end,:);
+[signals,fs_out,ratio] = downsampleTseries(signals,fs,newfs);
 fields = fieldnames(states);
 for i=1:length(fields)
     states.(fields{i}) = states.(fields{i})(1:ratio:end);
 end
-
 end
 end
 
+function [output, fs_out,ratio] = downsampleTseries(input,fs,newfs)
+[~,maxdim] = max(size(input));
+
+ratio = round(fs/newfs,0);
+fs_out = fs/ratio;
+if length(size(input))<2 % 1D samples
+    output=input(1:ratio:end);
+elseif maxdim == 1 %samples x channels
+    output=input(1:ratio:end,:);
+else %channels x samples
+    output=input(:,1:ratio:end);
+
+end
+end
 
 function X = compareGammaPower(baseline, post, fs, filterOrder)
 [base,~,~] = timeseriesPower(baseline',fs,[70 170],filterOrder, ...
@@ -610,4 +648,27 @@ function [datChans,brainChans,ia,ib] = indexChannelNames(datChans,brainChans)
 [~,ia,ib] = intersect(datChans,brainChans);
 brainChans = brainChans(ib);
 datChans = datChans(ia);
+end
+
+
+function [Signals,PulseLocs,Intervals, States,fs_out] = downsample_for_epochs(signals,states,pulseLocs,intervals,fs,fs_new)
+ratio = round(fs/fs_new,0);
+fs_out = fs/ratio;
+[States,Signals,~] = downsample_seeg(signals,states,fs,fs_new);
+PulseLocs = pulseLocs;
+Intervals = intervals;
+for i=1:length(PulseLocs)
+    % adjusting stim intervals
+    PulseLocs(i).signal = PulseLocs(i).signal(:,1:ratio:end);
+    x = PulseLocs(i).peaks;
+    for j=1:length(x)
+        temp = ceil(x(j).stim_array/ratio);
+        x(j).stim_array = temp;
+    end
+    PulseLocs(i).peaks = x;
+
+    % adjusting epoching intervals
+    Intervals(i).start = ceil(intervals(i).start/ratio);
+    Intervals(i).stop = ceil(intervals(i).stop/ratio);
+end
 end
