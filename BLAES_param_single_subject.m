@@ -141,30 +141,25 @@ tic;
 theta_epochs = theta_burst_epoch(signals,electrodeNames,intervals,timing_adjust,fs,stimMap,pulseLocs,regions,UtahFlag);
 disp(toc)
 
-%%
-epoch_outPath = fullfile(dataPath.folder,"theta_epochs.mat");
-save(epoch_outPath,'theta_epochs','fs','Subject','colors','subject_info','stimMap','-v7.3')
-fprintf('exported epoch struct')
+fprintf('\ndone epoching\n')
 
-%%
+
 theta_band = [4 10]; % Hz
 smoothing_window = 0.1; % in seconds
 filterOrder = computeStableFilter(theta_band,'bandpass',fs);
 gammaFiltOrder= computeStableFilter([70,170],'bandpass',fs);
 postStimStart = floor(2*fs);
-
+spectralFlag = 0;
 for i=1:length(theta_epochs)
-    [theta_epochs(i).theta_power,theta_epochs(i).theta_phase, theta_epochs(i).theta_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,theta_band,filterOrder, ...
-        'smooth',smoothing_window,'baselineDuration',1);
-    % theta_epochs(i).theta_power = zscore(theta_epochs(i).theta_power);
-    % theta_epochs(i).theta_power = avg_baseline_correct(theta_epochs(i).theta_power,1,fs);
+    
     theta_epochs(i).baseline_corr = channelCoherence(theta_epochs(i).baseline);
     theta_epochs(i).stim_corr = channelCoherence(theta_epochs(i).signals);
     theta_epochs(i).post_corr = channelCoherence(theta_epochs(i).pre_stim_post(:,postStimStart:end));
-    % [theta_epochs(i).gamma_power,theta_epochs(i).gamma_phase, theta_epochs(i).gamma_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,[70 170],filterOrder, ...
-    %     'smooth',smoothing_window,'baselineDuration',1);
-    % theta_epochs(i).gamma_power = zscore(theta_epochs(i).gamma_power);
-    % theta_epochs(i).gamma_change = compareGammaPower(theta_epochs(i).baseline,theta_epochs(i).post_stim,fs,gammaFiltOrder);
+    
+    
+    if spectralFlag
+    [theta_epochs(i).theta_power,theta_epochs(i).theta_phase, theta_epochs(i).theta_filt] = timeseriesPower(theta_epochs(i).pre_stim_post',fs,theta_band,filterOrder, ...
+        'smooth',smoothing_window,'baselineDuration',1);
     [theta_change,gamma_change, theta_rest,theta_task,gamma_rest,gamma_task] = computeBandDifferences(theta_epochs(i).baseline,theta_epochs(i).post_stim,fs);
     theta_epochs(i).theta_change = theta_change;
     theta_epochs(i).gamma_change = gamma_change;
@@ -172,18 +167,37 @@ for i=1:length(theta_epochs)
     theta_epochs(i).theta_task = theta_task;
     theta_epochs(i).gamma_rest = gamma_rest;
     theta_epochs(i).gamma_task = gamma_task;
+    end
 end
-fprintf('\ndone epoching\n')
+%%
+ 
+epoch_outPath = fullfile(dataPath.folder,'processed');
+if ~exist(epoch_outPath ,'dir')
+    [~,~]=mkdir(epoch_outPath);
+    fprintf('made dir at %s\n',epoch_outPath)
+else
+    fprintf('%s exists\n',epoch_outPath)
+end
 
-% coherenence stats
+export_stim_locations(pulseLocs,epoch_outPath)
+
+export_correlations(theta_epochs,epoch_outPath)
+
+export_raw_data(theta_epochs,fs,epoch_outPath)
+
+export_metadata(theta_epochs,epoch_outPath)
+
+
+%% coherenence stats
 export_labs = {'code' 'region' 'label' 'current' 'pw' 'freq' 'loc' 'channel' 'charge' 'chargePerPhase' 'chargeUnits' 'shank' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr' 'theta_change' 'gamma_change','theta_rest','theta_task','gamma_rest','gamma_task'};
-
 outstruct = struct();
 N = length(theta_epochs);
 for i=1:N
     for j=1:length(export_labs)
         field = export_labs{j};
+        if any(contains(fieldnames(theta_epochs),field))
         outstruct(i).(field) = theta_epochs(i).(field);
+        end
     end
     % stim vs baseline
     [d,p] = compare_distributions(theta_epochs(i).stim_corr,theta_epochs(i).baseline_corr);
@@ -438,9 +452,11 @@ for idx=1:total_combos
             slice_hp = getHighPassData(slice,2,4,fs);
             
 
-            d = slice_hp(onsets(trial_num):offsets(trial_num),chan);
-            baseline_window = [onsets(trial_num)-1-len,onsets(trial_num)-1];
+            % d = slice_hp(onsets(trial_num):offsets(trial_num),chan);
+            % baseline_window = [onsets(trial_num)-1-len,onsets(trial_num)-1];
             
+            d = slice_hp(len+1:2*len+1);
+            baseline_window = [1,len+1];
             
 
             baseline_signal = slice_hp(baseline_window(1):baseline_window(2));
@@ -460,8 +476,8 @@ for idx=1:total_combos
             sr = denoised_stim_signal;
             pr = post_stim_signal;   
             % agg_denoised = [br; sr; pr];
-            agg_denoised = slice_hp(:,chan);
-            agg_denoised(onsets(trial_num):offsets(trial_num)) = denoised_stim_signal;
+            agg_denoised = slice_hp;
+            agg_denoised(len+1:2*len+1) = denoised_stim_signal;
             
             raw_holder(trial_num,:) = slice_hp;
             baseline_holder(trial_num,:) = baseline_signal;
@@ -685,4 +701,40 @@ for i=1:length(PulseLocs)
     Intervals(i).start = ceil(intervals(i).start/ratio);
     Intervals(i).stop = ceil(intervals(i).stop/ratio);
 end
+end
+
+function export_raw_data(epochs,fs,dataDir)
+% gets data into 3D arrays structured sample x trial x recording_state
+%   recording state is a combination of stimulation config and recording
+%   location
+baseline = permute(reshape(cell2mat({epochs.baseline}), 24, 500, []), [2, 1, 3]);
+signals = permute(reshape(cell2mat({epochs.signals}), 24, 500, []), [2, 1, 3]);
+post_stim = permute(reshape(cell2mat({epochs.post_stim}), 24, 500, []), [2, 1, 3]);
+channel_idx = {epochs.channel_idx};
+code = {epochs.code};
+save(fullfile(dataDir,'epochs_timeseries.mat'),'baseline','signals','post_stim','channel_idx',"fs",'code','-v7.3')
+end
+
+function export_metadata(epoch_meta,dataDir)
+targets = {'signals' 'post_stim' 'baseline' 'pre_stim_post' 'full_trial', 'snr_av' 'baseline_corr' 'stim_corr' 'post_corr'};
+epoch_meta = rmfield(epoch_meta,targets);
+save(fullfile(dataDir,'epochs_metadata.mat'),"epoch_meta",'-v7.3')
+end
+
+function export_correlations(epochs,dataDir)
+export_labs = {'code' 'snr_av' 'channel_idx' 'baseline_corr' 'stim_corr' 'post_corr'};
+names = fieldnames(epochs);
+filtnames = names(~contains(names,export_labs));
+epochs = rmfield(epochs,filtnames);
+baseline_corr = cell2mat({epochs.baseline_corr}');
+post_corr = cell2mat({epochs.post_corr}');
+stim_corr = cell2mat({epochs.stim_corr}');
+snr_av = [epochs.snr_av]';
+code = [epochs.code]';
+channel_idx = [epochs.channel_idx]';
+save(fullfile(dataDir,'epochs_pairwise_corrs.mat'),"baseline_corr","post_corr","channel_idx","code","stim_corr","snr_av",'-v7.3')
+end
+
+function export_stim_locations(pulseLocs,dataDir)
+save(fullfile(dataDir,'epoch_pulseLocs.mat'),"pulseLocs",'-v7.3')
 end

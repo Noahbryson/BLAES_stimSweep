@@ -19,39 +19,43 @@ BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
 allSubList = [BJHSubs UtahSubs];
 % for subIdx = 1:length(allSubList)
 Subject = allSubList{end};
-data = load(fullfile(rootDataPath,Subject,"theta_epochs.mat"));
-
+[epochs,epoch_meta,epoch_corrs,pulseLocs]=load_data(fullfile(rootDataPath,Subject,'processed'));
+fs = epochs.fs;
+n_trials = 24;
+%%
+trainLen = size(epochs.signals,1);
+train_intervals = get_train_intervals(pulseLocs,n_trials,fs,8,trainLen);
 
 %% data viz
 count = 1;
 for i=111:112
 
 loc = i;
-reg = data.theta_epochs(loc).region;
-stimInfo = data.theta_epochs(loc).label;
-SNR = timeseries_SNR(data.theta_epochs(loc).signals',data.fs,'targetFreq',8,'testPlot',count);
+reg = epoch_meta(loc).region;
+stimInfo = epoch_meta(loc).label;
+SNR = timeseries_SNR(epochs.signals(:,:,i),epochs.fs,'targetFreq',8,'testPlot',count);
 figure
-axx1 = subplot(2,1,1);
-title(sprintf("%s %s", reg,stimInfo))
+% axx1 = subplot(2,1,1);
+
+
+[d,p] = compare_distributions(epoch_corrs.stim_corr(i,:),epoch_corrs.baseline_corr(i,:));
+title(sprintf("%s %s\nSNR = %0.2f\n d=%0.2f, p=%0.3f", reg,stimInfo,SNR,d,p))
+
+% axx2 = subplot(2,1,2);
 hold on
-plot(data.theta_epochs(loc).pre_stim_post','Color',[0.5 0.5 0.5])
-plot(mean(data.theta_epochs(loc).pre_stim_post),'Color',[1 0 0],'LineWidth',3)
-hold off 
-axx2 = subplot(2,1,2);
-title(sprintf('SNR = %0.2f',SNR))
-hold on
-plot(data.theta_epochs(loc).full_trial','Color',[0.5 0.5 0.5])
-plot(mean(data.theta_epochs(loc).full_trial),'Color',[1 0 0],'LineWidth',3)
+full_trial = [epochs.baseline(:,:,i); epochs.signals(:,:,i); epochs.post_stim(:,:,i)];
+plot(full_trial,'Color',[0.5 0.5 0.5])
+plot(mean(full_trial,2),'Color',[1 0 0],'LineWidth',3)
 hold off
-linkaxes([axx1,axx2],'x')
+% linkaxes([axx1,axx2],'x')
 count =+1;
 end
 
 
 %%
 
-signals = data.theta_epochs(110).signals;
-SNR = timeseries_SNR(signals',data.fs,'targetFreq',8,'testPlot');
+signals = epochs.signals(:,:,401);
+SNR = timeseries_SNR(signals,epoch_meta(401),'targetFreq',8,'testPlot');
 
 
 
@@ -78,3 +82,55 @@ SNR = timeseries_SNR(signals',fs,'targetFreq',8);
 % plot(t,out')
 % plot(t,testSig,'LineWidth',2)
 % hold off
+
+function [epochs,epoch_meta,epoch_corrs,pulseLocs]=load_data(dataPath)
+epochs = load(fullfile(dataPath,'epochs_timeseries.mat'));
+load(fullfile(dataPath,'epochs_metadata.mat'));
+epoch_corrs = load(fullfile(dataPath,'epochs_pairwise_corrs.mat'));
+pulseLocs = load(fullfile(dataPath,'epoch_pulseLocs.mat'));
+pulseLocs = pulseLocs.pulseLocs;
+end
+
+function [intervals]=get_train_intervals(pulseLocs,n_trials,fs,trainFreq,stimLen)
+n_trains = stimLen/fs * trainFreq;
+N= length(pulseLocs);
+stimLen= floor(fs / trainFreq*0.9); % number of samples in one cycle of the train
+onsets  = zeros(n_trials,n_trains,N);
+offsets = zeros(n_trials,n_trains,N);
+for i=1:length(pulseLocs)
+n = pulseLocs(i).n_pulse;
+x = {pulseLocs(i).peaks.stim_array};
+x = verify_symmetry(x);
+if size(x,1) ~= 1
+    x = x';
+end
+mat = cell2mat(x);
+onsets(:,:,i) = mat(1:n:end,:)';
+offsets(:,:,i) = mat(1:n:end,:)' + stimLen;
+intervals = struct;
+intervals.onsets = onsets;
+intervals.offsets = offsets;
+end
+
+end
+
+
+
+function out = verify_symmetry(dat)
+lens = cellfun(@length,dat);
+m = median(lens);
+locs = find(lens ~= m);
+out = dat;
+for i=1:length(locs)
+    subset = dat{locs(i)};
+    diffs = diff(subset);
+    [~, ml] = min(diffs);
+    logIdx = ones(length(subset),1);
+    logIdx(ml+1)=0;
+    out{locs(i)} = subset(logical(logIdx));
+    
+end
+
+
+
+end
