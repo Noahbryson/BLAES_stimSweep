@@ -13,22 +13,26 @@ addpath(genpath(fullfile(user,'Documents/NCAN/code/MATLAB_tools')));
 bci2ktools(BCI2KPath);
 %%
 all_subject_info = readtable(fullfile(rootDataPath,'Subject_Locations.xlsx'));
+UtahSubs = {'UIC202407' 'UIC202412' 'UIC202414'};
+BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
+allSubList = [BJHSubs UtahSubs];
+subIdx = 1;
+% for subIdx = 1:length(allSubList)-1
+
+Subject = allSubList{subIdx};
 % for subIdx = 2:height(all_subject_info)
 % UtahSubs = {'UIC202407' 'UIC202412' 'UIC202414'};
 % BJHSubs = {'BJH050' 'BJH052' 'BJH056'};
 % for subIdx=1:length(BJHSubs)
 % subIdx = 2;
 % Subject = 'BJH050';
-Subject = all_subject_info.Subject{end};
+% Subject = all_subject_info.Subject{end};
 % Subject = BJHSubs{subIdx};
 %%
 disp(Subject)
 groupPath = fullfile(rootDataPath,'group');
 sections = 0;
 subject_info = table2struct(all_subject_info(strcmp(all_subject_info.Subject, Subject),:));
-stim_info = struct();
-stim_info(1).pair = subject_info.Pair1;
-stim_info(1).val = subject_info.loc1;stim_info(2).pair = subject_info.Pair2;stim_info(2).val = subject_info.loc2;
 subject_info.Triggers = strsplit(subject_info.Triggers,',');
     
 mainfigDir = fullfile(rootDataPath,Subject,"figures");
@@ -130,8 +134,9 @@ timing_adjust = 80; % ms, due to software triggered stimulation state.
 % [states,signals,fs] = downsample_seeg(signals,states,fs,500);
 
 [epochLocs,intervals] =getAllIntervals(states.StimulusCode,stimMap);
-
-pulseLocs= triggerEpochs(trigger,stimMap,timing_adjust,intervals,fs,8,1,2*std(abs(trigger)));
+%%
+pulseLocs= triggerEpochs(abs(trigger),stimMap,timing_adjust,intervals,fs,8,1,2*std(abs(trigger)));
+%%
 [signals,pulseLocs,intervals,states,fs] = downsample_for_epochs(signals,states,pulseLocs,intervals,fs,500);
 fprintf('\ndone preprocessing\n')
 
@@ -337,6 +342,8 @@ for i=1:length(intervals)
     % onsetPeak = mode(onsetPeaks);
     end
     peaks = struct();
+    % peaks = cell(length(onsets),1);
+    % peaks = zeros(length(onsets),num_peaks);
     for j=1:length(onsets)
         % TODO: add manual adjustment when number of peaks is off.
         % calculate number of peaks from train duration, frequency and num
@@ -349,68 +356,64 @@ for i=1:length(intervals)
         % [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist);
         % [pk,tloc] = maxk(pk,num_peaks);
         % pkLoc = pkLoc(tloc);
-        % [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'MinPeakHeight',thresh,'NPeaks',num_peaks);     
-        [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'MinPeakHeight',thresh);     
+        [~,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'MinPeakHeight',thresh,'NPeaks',num_peaks);     
+        % [pk,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'MinPeakHeight',thresh);     
 
         % pkLoc = stim_prediction(d,fs,trig(i).f,base_frequency,num_peaks, stimDuration,onsetPeak);
 
-        % figure
-        % plot(abs(d))
-        % hold on
-        % yline(thresh)
-        % xline(linspace(1,8,8)*fs/8,'Color',[0 1 0])
-        % scatter(pkLoc,pk);
-        % hold off
-        % pkLoc = pkLoc;
         annotate = 0;
-        peaks(j).trial = j;
-        if length(pk) < num_peaks && annotate
-            n = num_peaks - length(pk);
-            fig=figure;
-            hold on
-            plot(abs(d),'LineWidth',2.2)
-            yline(thresh)
-            scatter(pkLoc,pk);
-            title(sprintf('code %d iter %d\nadd %d points',i,j,n))
-            hold off
-            set(gcf,'Position',[800 600 2000 900])
-            [pkLoc_n,pk_n] = ginput(n);
-            close(fig)
-            pkLoc = [pkLoc; pkLoc_n];
-            pk = [pk; pk_n];
-            peaks(j).n = pkLoc;
-
-        elseif length(pk) > num_peaks && annotate
-            n = length(pk)-num_peaks;
-            fig=figure;
-            hold on
-            plot(abs(d),'LineWidth',2.2)
-            yline(thresh)
-            scatter(pkLoc,pk);
-            title(sprintf('code %d iter %d\nremove %d points',i,j,n))
-            hold off
-            set(gcf,'Position',[800 600 2000 900])
-            [pkLoc_n,pk_n] = ginput(n);
-            pkLoc_n = pkLoc(knnsearch(pkLoc(:),pkLoc_n(:)));
-            rm_loc = ismember(pkLoc, pkLoc_n);
-            pkLoc = pkLoc(~rm_loc);
-            pk = pk(~rm_loc);
-            peaks(j).n = pkLoc;
-            close(fig)
-        else
-
-            if length(pkLoc) ~= num_peaks
-                peaks(j).n = length(pkLoc);
-                peaks(j).stim_array = pkLoc;
-                peaks(j).expected = num_peaks;
-            end
-            peaks(j).n = length(pkLoc);
-            peaks(j).stim_array = pkLoc;
-            peaks(j).expected = num_peaks;
+        
+        % if length(pk) < num_peaks && annotate
+        %     n = num_peaks - length(pk);
+        %     fig=figure;
+        %     hold on
+        %     plot(abs(d),'LineWidth',2.2)
+        %     yline(thresh)
+        %     scatter(pkLoc,pk);
+        %     title(sprintf('code %d iter %d\nadd %d points',i,j,n))
+        %     hold off
+        %     set(gcf,'Position',[800 600 2000 900])
+        %     [pkLoc_n,pk_n] = ginput(n);
+        %     close(fig)
+        %     pkLoc = [pkLoc; pkLoc_n];
+        %     pk = [pk; pk_n];
+        %     peaks(j).n = pkLoc;
+        % 
+        % elseif length(pk) > num_peaks && annotate
+        %     n = length(pk)-num_peaks;
+        %     fig=figure;
+        %     hold on
+        %     plot(abs(d),'LineWidth',2.2)
+        %     yline(thresh)
+        %     scatter(pkLoc,pk);
+        %     title(sprintf('code %d iter %d\nremove %d points',i,j,n))
+        %     hold off
+        %     set(gcf,'Position',[800 600 2000 900])
+        %     [pkLoc_n,pk_n] = ginput(n);
+        %     pkLoc_n = pkLoc(knnsearch(pkLoc(:),pkLoc_n(:)));
+        %     rm_loc = ismember(pkLoc, pkLoc_n);
+        %     pkLoc = pkLoc(~rm_loc);
+        %     pk = pk(~rm_loc);
+        %     peaks(j).n = pkLoc;
+        %     close(fig)
+        % else
+        incremental_reduction = 0.5; % 20% reduction in threshold;
+        counter = 1;
+        if length(pkLoc) ~= num_peaks
+            reduc = thresh/2;
+            [~,pkLoc] = findpeaks(abs(d),'MinPeakDistance',peak_dist,'MinPeakHeight',reduc,'NPeaks',num_peaks);     
         end
+        % peaks(j,:) = pkLoc;
+        peaks(j).trial = j;
+        peaks(j).n = length(pkLoc);
+        peaks(j).stim_array = pkLoc;
+        peaks(j).expected = num_peaks;
+        % peaks{j} = pkLoc;
+        % end
     end
     trig(i).signal = temp;
     trig(i).peaks = peaks;
+    
 end
 end
 
@@ -602,6 +605,7 @@ trigger = abs(filtfilt(b,a,common));
 
 trigger2 = mean(signals(:,triggerLocs),2); % this one seemingly works best, however will break down in bilateral stimulation. 
 triggerOut = filtfilt(b,a,trigger2);
+triggerOut = abs(triggerOut);
 thresh = 0.5*std(triggerOut);
 close all
 % figure

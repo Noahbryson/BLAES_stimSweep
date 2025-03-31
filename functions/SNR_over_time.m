@@ -20,12 +20,17 @@
 % t (array): each time point specified in intervals
 % SNR (array): SNR at each time point specified in intervals
 function [t,SNR] = SNR_over_time(signals,fs,intervals,varargin)
+t_all = linspace(0,size(signals,1)/fs,size(signals,1));
 
-
-
-
-
-
-
+t = zeros(size(intervals));
+SNR = zeros(length(intervals),1);
+for i=1:length(intervals)
+    onset = intervals(i,1);
+    offset = intervals(i,2);
+    sig_slice = signals(onset:offset,:);
+    [avgSNR, ~] = timeseries_SNR(sig_slice,fs,varargin);
+    t(i,:) = [t_all(onset),t_all(offset)];
+    SNR(i) = avgSNR;
+end
 
 end
